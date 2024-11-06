@@ -74,6 +74,22 @@ RUN apt-get update && apt-get install -y zsh git && \
 # zstyle ':prezto:module:terminal:tab-title' format '%m: %s'\n\
 # " > /root/.zpreztorc
 
+
+# More image-related tools.
+RUN apt-get install -y \
+	libcairo2-dev \
+	libjpeg-dev \
+	libpango1.0-dev \
+	libgif-dev \
+	librsvg2-dev \
+	pkg-config \
+	libreoffice \
+	iputils-ping
+
+RUN apt-get install -y locales && \
+		locale-gen en_US.UTF-8 && \
+		echo "export LANG=en_US.UTF-8\nexport LANGUAGE=en_US:en\nexport LC_ALL=en_US.UTF-8" >> /root/.zshrc
+
 CMD ["zsh"]
 
 # Cleanup apt cache
@@ -86,5 +102,4 @@ EXPOSE 8080
 # Later
 # - make sure pip is up to date.
 # - install n to change node versions.
-
 
