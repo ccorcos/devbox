@@ -1,0 +1,46 @@
+#!/bin/sh
+
+# Get the name of the current directory
+container_name=$(basename "$PWD")
+
+# Function to start the devbox container
+start_devbox() {
+  docker run -d -P --name "$container_name" -v "$PWD":/"$container_name" devbox tail -f /dev/null
+  echo "Started devbox container with name: $container_name, mounted to /$container_name"
+}
+
+# Function to stop the devbox container
+stop_devbox() {
+  docker stop "$container_name" && docker rm "$container_name"
+  echo "Stopped and removed devbox container with name: $container_name"
+}
+
+# Function to attach to the devbox container
+attach_devbox() {
+  docker exec -it "$container_name" /bin/zsh
+}
+
+# Function to list all running devbox containers
+list_devboxes() {
+  echo "Running devbox containers:"
+  docker ps --filter "ancestor=devbox" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+}
+
+# Check the command argument
+case "$1" in
+  start)
+    start_devbox
+    ;;
+  stop)
+    stop_devbox
+    ;;
+  list)
+    list_devboxes
+    ;;
+  "")
+    attach_devbox
+    ;;
+  *)
+    echo "Usage: $0 {start|stop|list}"
+    ;;
+esac
