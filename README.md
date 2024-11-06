@@ -50,4 +50,3 @@ devbox stop
 #$ docker stop "$X" && docker rm "$X"
 ```
 
-sudo ln -s "$(pwd)"/devbox /usr/local/bin/devbox
