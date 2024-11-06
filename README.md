@@ -47,6 +47,9 @@ devbox
 #$ docker exec -it "$X" /bin/zsh
 
 devbox stop
-#$ docker stop "$X" && docker rm "$X"
+#$ docker stop "$X"
+
+devbox destroy
+#$ docker rm "$X"
 ```
 

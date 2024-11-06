@@ -1,23 +1,40 @@
 #!/bin/sh
 
-# Get the name of the current directory
-container_name=$(basename "$PWD")
+# Get the name of the current directory and assign it to X
+X=$(basename "$PWD")
 
-# Function to start the devbox container
+# Function to start or restart the devbox container
 start_devbox() {
-  docker run -d -P --name "$container_name" -v "$PWD":/"$container_name" devbox tail -f /dev/null
-  echo "Started devbox container with name: $container_name, mounted to /$container_name"
+  if docker ps -a --format '{{.Names}}' | grep -q "^$X$"; then
+    # Container exists, check if it is running
+    if [ "$(docker inspect -f '{{.State.Running}}' "$X")" = "true" ]; then
+      echo "Container $X is already running."
+    else
+      docker start "$X"
+      echo "Restarted devbox container with name: $X"
+    fi
+  else
+    # Container does not exist, create and start it
+    docker run -d -P --name "$X" -v "$PWD":/"$X" devbox tail -f /dev/null
+    echo "Started new devbox container with name: $X, mounted to /$X"
+  fi
 }
 
-# Function to stop the devbox container
+# Function to stop the devbox container without removing it
 stop_devbox() {
-  docker stop "$container_name" && docker rm "$container_name"
-  echo "Stopped and removed devbox container with name: $container_name"
+  docker stop "$X"
+  echo "Stopped devbox container with name: $X"
+}
+
+# Function to destroy (stop and remove) the devbox container
+destroy_devbox() {
+  docker stop "$X" && docker rm "$X"
+  echo "Destroyed devbox container with name: $X"
 }
 
 # Function to attach to the devbox container
 attach_devbox() {
-  docker exec -it "$container_name" /bin/zsh
+  docker exec -it "$X" /bin/zsh
 }
 
 # Function to list all running devbox containers
@@ -34,6 +51,9 @@ case "$1" in
   stop)
     stop_devbox
     ;;
+  destroy)
+    destroy_devbox
+    ;;
   list)
     list_devboxes
     ;;
@@ -41,6 +61,6 @@ case "$1" in
     attach_devbox
     ;;
   *)
-    echo "Usage: $0 {start|stop|list}"
+    echo "Usage: $0 {start|stop|destroy|list}"
     ;;
 esac
