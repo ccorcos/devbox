@@ -2,6 +2,13 @@
 
 # Color variables for output formatting
 RED='\033[31m'
+GREEN='\033[32m'
+YELLOW='\033[33m'
+BLUE='\033[34m'
+MAGENTA='\033[35m'
+CYAN='\033[36m'
+WHITE='\033[37m'
+GRAY='\033[90m'
 BLACK='\033[0m'
 
 # Get the name of the current directory and assign it to X
@@ -210,16 +217,6 @@ attach_devbox() {
   docker exec -it -w "/$PROJECT_NAME" "$CONTAINER_NAME" /bin/zsh
 }
 
-# Function to list all running devbox containers
-list_devboxes() {
-  echo "Running devbox containers:"
-  # Show both default devbox containers and project-specific devbox-* containers
-  docker ps --filter "ancestor=devbox" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
-  docker ps --filter "label=devbox-project" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null || true
-  # Also show containers with devbox-* image pattern
-  docker ps | grep "devbox-" | awk '{print $NF "\t" $(NF-1) "\t" $1}' 2>/dev/null || true
-}
-
 # Function to initialize a new devbox project
 init_devbox() {
   if [ -f "Dockerfile.devbox" ]; then
@@ -331,31 +328,33 @@ show_status() {
   local dockerfile_path
   dockerfile_path=$(get_dockerfile_path)
 
-  echo "Project: $PROJECT_NAME"
-  echo "Dockerfile: $dockerfile_path"
+  echo "$PROJECT_NAME"
+  printf "  Dockerfile: %s\n" "$dockerfile_path"
 
-  # Check if image exists
+  # Check if image exists and determine status
   if ! docker image inspect "$IMAGE_NAME" >/dev/null 2>&1; then
-    echo "Image: ❌ NOT BUILT"
-    return 0
+    printf "  Image:       %s " "$IMAGE_NAME"
+    printf "${YELLOW}[NOT BUILT]${BLACK}\n"
   else
+    printf "  Image:       %s " "$IMAGE_NAME"
     # Check if rebuild is needed
     if needs_rebuild; then
-      echo "Image: $IMAGE_NAME 🔄 REBUILD NEEDED (Dockerfile content changed)"
+      printf "${YELLOW}[REBUILD NEEDED]${BLACK}\n"
     else
-      echo "Image: $IMAGE_NAME ✅ BUILT AND UP TO DATE"
+      printf "${GREEN}[UP TO DATE]${BLACK}\n"
     fi
   fi
 
   # Check container status
+  printf "  Container:   %s " "$CONTAINER_NAME"
   if docker ps -a --format '{{.Names}}' | grep -q "^$CONTAINER_NAME$"; then
     if [ "$(docker inspect -f '{{.State.Running}}' "$CONTAINER_NAME" 2>/dev/null)" = "true" ]; then
-      echo "Container: $CONTAINER_NAME ✅ RUNNING"
+      printf "${GREEN}[RUNNING]${BLACK}\n"
     else
-      echo "Container: $CONTAINER_NAME 🛑 STOPPED"
+      printf "${YELLOW}[STOPPED]${BLACK}\n"
     fi
   else
-    echo "Container: $CONTAINER_NAME ❌ NOT CREATED"
+    printf "${YELLOW}[NOT CREATED]${BLACK}\n"
   fi
 }
 
@@ -425,9 +424,6 @@ delete_devbox() {
 
 # Check the command argument
 case "$1" in
-  list)
-    list_devboxes
-    ;;
   init)
     init_devbox
     ;;
@@ -469,7 +465,8 @@ case "$1" in
     # Stop container without removing
     if docker ps --format '{{.Names}}' | grep -q "^$CONTAINER_NAME$"; then
       echo "Stopping container $CONTAINER_NAME..."
-      docker stop "$CONTAINER_NAME"
+      # Stop immediately without waiting.
+      docker stop -t 0 "$CONTAINER_NAME"
     else
       echo "Container $CONTAINER_NAME is not running."
     fi
@@ -493,7 +490,6 @@ case "$1" in
     echo ""
     echo "Commands:"
     echo "  (no args)  - Attach to or create devbox container for this directory"
-    echo "  list       - List all running devbox containers"
     echo "  init       - Copy Dockerfile.devbox template to current directory"
     echo "  cleanup    - Remove old devbox containers and images"
     echo ""

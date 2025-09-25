@@ -1,41 +1,53 @@
 
-```sh
-# stop all containers
-docker stop $(docker ps -q)
-# delete all stopped containers
-docker container prune -f
-# delete all images
-```
-
-
+## Docker Notes
 
 ```sh
 # running containers
 docker ps
 # all containers
 docker ps -a
-# images
+# stop all containers
+docker stop $(docker ps -q)
+# delete all stopped containers
+docker container prune -f
+
+# list all images
 docker image ls
+# delete all images
+docker rmi $(docker images -a -q)
 ```
+
+## Devbox Notes
+
+Improve the readability of the output for devbox status to look more like this. Give the [LABEL] text an appropriate color too.
+> cd geocalc
+> devbox status
+geocalc
+  Dockerfile: /Users/chet/Code/devbox/Dockerfile.devbox
+  Image:       devbox [REBUILD NEEDED]
+  Container:   geocalc [NOT CREATED]
+
+
 
 Testing
 ```sh
-devbox path
 devbox build
 ```
 
 
-Test everything...
-devbox status
+PORT thing...
 
-Cleanup
-stop containers
-delete containers
-delete images
+❯ devbox help
+Usage: /usr/local/bin/devbox
 
-
-
-
+Commands:
+  (no args)  - Create the devbox and attach to it.
+  status     - Show status of devbox Dockerfile, image, and container.
+  init       - Copy Dockerfile.devbox template to current directory for a project-specific devbox.
+  build      - Build/rebuild the devbox Docker image
+  delete     - Stops the container, deletes it, and deletes the image.
+  start      - Start the container.
+  stop       - Stop the container and delete the container.
 
 
 
