@@ -50,6 +50,11 @@ Lets do an audit of this script and come up with a refactoring plan. Lets try to
 Currently container names are called $project but I'd like the container names should be `$project-devbox` so we can easily tell which containers and images are devboxes. Same goes with custom images -- those should also be called $project-devbox instead of just $project.
 
 
+I'd like an "autostop" function that we can run after users exit when running the default command. It should check to see if there are any other processes attached to the container and if not it should call stop to clean it up.
+
+
+I'd like to make the zshj
+
 zsh inside look better.
 Auto-stop?
 
