@@ -22,9 +22,10 @@ check_prerequisites() {
   # Check if OrbStack is running
   if ! orb status >/dev/null 2>&1; then
     echo "OrbStack is not running. Starting OrbStack..."
-    orb
+    orb >/dev/null 2>&1
     # Wait a moment for OrbStack to start
     sleep 3
+    echo "OrbStack started successfully."
   fi
 
   # Check if Docker daemon is accessible
@@ -58,34 +59,6 @@ check_dockerfile_and_image() {
   return 0
 }
 
-# Function to start or restart the devbox container
-start_devbox() {
-  if docker ps -a --format '{{.Names}}' | grep -q "^$X$"; then
-    # Container exists, check if it is running
-    if [ "$(docker inspect -f '{{.State.Running}}' "$X")" = "true" ]; then
-      echo "Container $X is already running."
-    else
-      docker start "$X"
-      echo "Restarted devbox container with name: $X"
-    fi
-  else
-    # Container does not exist, create and start it
-    docker run -d -P --name "$X" -v "$PWD":/"$X" devbox tail -f /dev/null
-    echo "Started new devbox container with name: $X, mounted to /$X"
-  fi
-}
-
-# Function to stop the devbox container without removing it
-stop_devbox() {
-  docker stop "$X"
-  echo "Stopped devbox container with name: $X"
-}
-
-# Function to destroy (stop and remove) the devbox container
-destroy_devbox() {
-  docker stop "$X" && docker rm "$X"
-  echo "Destroyed devbox container with name: $X"
-}
 
 # Function to attach to the devbox container
 attach_devbox() {
@@ -110,7 +83,7 @@ attach_devbox() {
     docker run -d -P --name "$X" -v "$PWD":/"$X" devbox tail -f /dev/null
   fi
 
-  docker exec -it "$X" /bin/zsh
+  docker exec -it -w "/$X" "$X" /bin/zsh
 }
 
 # Function to list all running devbox containers
@@ -127,8 +100,12 @@ init_devbox() {
     return 1
   fi
 
-  # Get the directory of the devbox script
-  SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+  # Get the directory of the devbox script (resolve symlinks)
+  SCRIPT_PATH="$0"
+  while [ -L "$SCRIPT_PATH" ]; do
+    SCRIPT_PATH="$(readlink "$SCRIPT_PATH")"
+  done
+  SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
 
   if [ -f "$SCRIPT_DIR/Dockerfile.template" ]; then
     cp "$SCRIPT_DIR/Dockerfile.template" "./Dockerfile"
@@ -222,15 +199,6 @@ cleanup_devbox() {
 
 # Check the command argument
 case "$1" in
-  start)
-    start_devbox
-    ;;
-  stop)
-    stop_devbox
-    ;;
-  destroy)
-    destroy_devbox
-    ;;
   list)
     list_devboxes
     ;;
