@@ -10,7 +10,7 @@ if [ -f "Dockerfile.devbox" ]; then
   CONTAINER_NAME="devbox-$PROJECT_NAME"
   IMAGE_NAME="devbox-$PROJECT_NAME"
 else
-  CONTAINER_NAME="$PROJECT_NAME"
+  CONTAINER_NAME="$PROJECT_NAME-devbox"
   IMAGE_NAME="devbox"
 fi
 
