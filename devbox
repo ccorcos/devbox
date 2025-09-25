@@ -68,6 +68,21 @@ get_dockerfile_path() {
   fi
 }
 
+# Function to get the hash of the Dockerfile content
+get_dockerfile_hash() {
+  local dockerfile_path="$1"
+  if [ -f "$dockerfile_path" ]; then
+    shasum -a 256 "$dockerfile_path" | cut -d' ' -f1
+  else
+    echo ""
+  fi
+}
+
+# Function to get the stored hash for the image
+get_image_dockerfile_hash() {
+  docker image inspect "$IMAGE_NAME" --format '{{index .Config.Labels "dockerfile.hash"}}' 2>/dev/null || echo ""
+}
+
 # Function to check if image needs rebuilding
 needs_rebuild() {
   local dockerfile_path
@@ -83,21 +98,14 @@ needs_rebuild() {
     return 1  # No Dockerfile, can't rebuild
   fi
 
-  # Get image creation time and Dockerfile modification time
-  local image_created dockerfile_modified
-  image_created=$(docker image inspect "$IMAGE_NAME" --format '{{.Created}}' 2>/dev/null)
-  dockerfile_modified=$(stat -f "%Sm" -t "%Y-%m-%dT%H:%M:%S" "$dockerfile_path" 2>/dev/null)
+  # Get current Dockerfile hash and stored hash
+  local current_hash stored_hash
+  current_hash=$(get_dockerfile_hash "$dockerfile_path")
+  stored_hash=$(get_image_dockerfile_hash)
 
-  if [ -z "$image_created" ] || [ -z "$dockerfile_modified" ]; then
-    return 0  # Can't determine, assume rebuild needed
-  fi
-
-  # Convert to seconds for comparison
-  image_seconds=$(date -j -f "%Y-%m-%dT%H:%M:%S" "${image_created%.*}" "+%s" 2>/dev/null || echo "0")
-  dockerfile_seconds=$(date -j -f "%Y-%m-%dT%H:%M:%S" "$dockerfile_modified" "+%s" 2>/dev/null || echo "0")
-
-  if [ "$dockerfile_seconds" -gt "$image_seconds" ]; then
-    return 0  # Dockerfile is newer, needs rebuild
+  # If we can't get hashes or they don't match, rebuild needed
+  if [ -z "$current_hash" ] || [ -z "$stored_hash" ] || [ "$current_hash" != "$stored_hash" ]; then
+    return 0  # Dockerfile content has changed, needs rebuild
   fi
 
   return 1  # No rebuild needed
@@ -113,10 +121,14 @@ build_image() {
     return 1
   fi
 
+  # Get Dockerfile hash to store as label
+  local dockerfile_hash
+  dockerfile_hash=$(get_dockerfile_hash "$dockerfile_path")
+
   echo "Building Docker image '$IMAGE_NAME'..."
   if [ -n "$DOCKERFILE_PATH" ]; then
     # Project-specific build from current directory
-    if ! docker build -f "$DOCKERFILE_PATH" -t "$IMAGE_NAME" .; then
+    if ! docker build -f "$DOCKERFILE_PATH" -t "$IMAGE_NAME" --label "dockerfile.hash=$dockerfile_hash" .; then
       echo "${RED}Error: Failed to build Docker image.${BLACK}"
       return 1
     fi
@@ -128,7 +140,7 @@ build_image() {
     done
     SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
 
-    if ! docker build -f "$SCRIPT_DIR/Dockerfile.devbox" -t "$IMAGE_NAME" "$SCRIPT_DIR"; then
+    if ! docker build -f "$SCRIPT_DIR/Dockerfile.devbox" -t "$IMAGE_NAME" --label "dockerfile.hash=$dockerfile_hash" "$SCRIPT_DIR"; then
       echo "${RED}Error: Failed to build Docker image.${BLACK}"
       return 1
     fi
@@ -314,22 +326,6 @@ cleanup_devbox() {
   echo "Cleanup complete."
 }
 
-# Function to show the path to the Dockerfile being used
-show_path() {
-  local dockerfile_path
-  dockerfile_path=$(get_dockerfile_path)
-
-  if [ -n "$DOCKERFILE_PATH" ]; then
-    echo "Using project-specific Dockerfile: $dockerfile_path"
-    echo "Container name: $CONTAINER_NAME"
-    echo "Image name: $IMAGE_NAME"
-  else
-    echo "Using default Dockerfile: $dockerfile_path"
-    echo "Container name: $CONTAINER_NAME"
-    echo "Image name: $IMAGE_NAME"
-  fi
-}
-
 # Function to show status of the devbox image and container
 show_status() {
   local dockerfile_path
@@ -345,7 +341,7 @@ show_status() {
   else
     # Check if rebuild is needed
     if needs_rebuild; then
-      echo "Image: $IMAGE_NAME 🔄 REBUILD NEEDED (Dockerfile modified)"
+      echo "Image: $IMAGE_NAME 🔄 REBUILD NEEDED (Dockerfile content changed)"
     else
       echo "Image: $IMAGE_NAME ✅ BUILT AND UP TO DATE"
     fi
@@ -438,9 +434,6 @@ case "$1" in
   cleanup)
     cleanup_devbox
     ;;
-  path)
-    show_path
-    ;;
   status)
     show_status
     ;;
@@ -505,7 +498,6 @@ case "$1" in
     echo "  cleanup    - Remove old devbox containers and images"
     echo ""
     echo "New commands:"
-    echo "  path       - Show path to Dockerfile being used"
     echo "  status     - Show status of devbox image and container"
     echo "  build      - Build/rebuild the devbox image"
     echo "  delete     - Delete the devbox image (stops containers first)"

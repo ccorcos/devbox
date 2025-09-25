@@ -1,21 +1,44 @@
 
-Here's what happened when I tried to run devbox from a project.
+```sh
+# stop all containers
+docker stop $(docker ps -q)
+# delete all stopped containers
+docker container prune -f
+# delete all images
+```
 
-❯❯❯ devbox
-Error: Default devbox image not found.
-Please build the default devbox image first:
-  cd <devbox-repo-path>
-  docker build -f Dockerfile.devbox -t devbox .
 
-I want two things to happen here.
-1. if the devbox image doesnt exist, then build it.
-2. if the Dockerfile.devbox file has changed since it was built, then rebuild it.
 
-Add some helper commands to expose this functionallity manually.
-- `devbox path` will tell you which Dockerfile.devbox file its looking at. Either the project or the default.
-- `devbox status` will tell you if the container is out of date and needs to be rebuilt.
-- `devbox build` will build / rebuild the container.
-- `devbox delete` will delete the container
+```sh
+# running containers
+docker ps
+# all containers
+docker ps -a
+# images
+docker image ls
+```
+
+Testing
+```sh
+devbox path
+devbox build
+```
+
+
+Test everything...
+devbox status
+
+Cleanup
+stop containers
+delete containers
+delete images
+
+
+
+
+
+
+
 
 ---
 
