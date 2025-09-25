@@ -11,32 +11,63 @@ WHITE='\033[37m'
 GRAY='\033[90m'
 BLACK='\033[0m'
 
-# Get the name of the current directory and assign it to X
+# Constants
+DEFAULT_PORT=3000
+DOCKER_STOP_TIMEOUT=0
+
+# Global variables
 PROJECT_NAME=$(basename "$PWD")
 
 # Determine container name and image based on presence of local Dockerfile.devbox
 if [ -f "Dockerfile.devbox" ]; then
   CONTAINER_NAME="devbox-$PROJECT_NAME"
   IMAGE_NAME="devbox-$PROJECT_NAME"
-  DOCKERFILE_PATH="Dockerfile.devbox"
 else
   CONTAINER_NAME="$PROJECT_NAME"
   IMAGE_NAME="devbox"
-  DOCKERFILE_PATH=""
 fi
+
+# Core utility functions
+get_script_directory() {
+  local script_path="$0"
+  while [ -L "$script_path" ]; do
+    script_path="$(readlink "$script_path")"
+  done
+  cd "$(dirname "$script_path")" && pwd
+}
+
+container_exists() {
+  docker ps -a --format '{{.Names}}' | grep -q "^$CONTAINER_NAME$"
+}
+
+container_is_running() {
+  [ "$(docker inspect -f '{{.State.Running}}' "$CONTAINER_NAME" 2>/dev/null)" = "true" ]
+}
+
+image_exists() {
+  docker image inspect "$IMAGE_NAME" >/dev/null 2>&1
+}
+
+print_error() {
+  echo "${RED}Error: $1${BLACK}"
+}
+
+print_success() {
+  echo "✅ $1"
+}
 
 # Function to check prerequisites
 check_prerequisites() {
   # Check if docker command exists
   if ! command -v docker >/dev/null 2>&1; then
-    echo "${RED}Error: Docker is not installed.${BLACK}"
+    print_error "Docker is not installed."
     echo "Please install Docker: brew install docker"
     return 1
   fi
 
   # Check if orb command exists (for OrbStack)
   if ! command -v orb >/dev/null 2>&1; then
-    echo "${RED}Error: OrbStack is not installed.${BLACK}"
+    print_error "OrbStack is not installed."
     echo "Please install OrbStack: brew install orbstack"
     return 1
   fi
@@ -45,14 +76,12 @@ check_prerequisites() {
   if ! orb status >/dev/null 2>&1; then
     echo "OrbStack is not running. Starting OrbStack..."
     orb start
-    # Wait a moment for OrbStack to start
-    # sleep 3
-    echo "✅ OrbStack started successfully."
+    print_success "OrbStack started successfully."
   fi
 
   # Check if Docker daemon is accessible
   if ! docker info >/dev/null 2>&1; then
-    echo "${RED}Error: Docker daemon is not accessible.${BLACK}"
+    print_error "Docker daemon is not accessible."
     echo "Please ensure Docker/OrbStack is running properly."
     return 1
   fi
@@ -60,20 +89,6 @@ check_prerequisites() {
   return 0
 }
 
-# Function to get the path to the Dockerfile being used
-get_dockerfile_path() {
-  if [ -n "$DOCKERFILE_PATH" ]; then
-    echo "$PWD/$DOCKERFILE_PATH"
-  else
-    # Get the directory of the devbox script (resolve symlinks)
-    SCRIPT_PATH="$0"
-    while [ -L "$SCRIPT_PATH" ]; do
-      SCRIPT_PATH="$(readlink "$SCRIPT_PATH")"
-    done
-    SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
-    echo "$SCRIPT_DIR/Dockerfile.devbox"
-  fi
-}
 
 # Function to get the hash of the Dockerfile content
 get_dockerfile_hash() {
@@ -90,19 +105,49 @@ get_image_dockerfile_hash() {
   docker image inspect "$IMAGE_NAME" --format '{{index .Config.Labels "dockerfile.hash"}}' 2>/dev/null || echo ""
 }
 
+# Docker operation functions
+create_container() {
+  local port="${PORT:-$DEFAULT_PORT}"
+  echo "Creating new container $CONTAINER_NAME..."
+  docker run -d -p "$port:$port" -e "PORT=$port" --name "$CONTAINER_NAME" \
+    -v "$PWD":/"$PROJECT_NAME" "$IMAGE_NAME" tail -f /dev/null
+}
+
+start_container() {
+  if container_exists; then
+    if ! container_is_running; then
+      echo "Starting stopped container $CONTAINER_NAME..."
+      docker start "$CONTAINER_NAME"
+    else
+      echo "Container $CONTAINER_NAME is already running."
+    fi
+  else
+    create_container
+  fi
+}
+
+stop_container() {
+  if container_exists; then
+    echo "Stopping and deleting container $CONTAINER_NAME..."
+    docker stop -t "$DOCKER_STOP_TIMEOUT" "$CONTAINER_NAME" 2>/dev/null || true
+    docker rm "$CONTAINER_NAME"
+  else
+    echo "Container $CONTAINER_NAME does not exist."
+  fi
+}
+
 # Function to check if image needs rebuilding
 needs_rebuild() {
   local dockerfile_path
-  dockerfile_path=$(get_dockerfile_path)
-
-  # Check if image exists
-  if ! docker image inspect "$IMAGE_NAME" >/dev/null 2>&1; then
-    return 0  # Image doesn't exist, needs build
+  if [ -f "Dockerfile.devbox" ]; then
+    dockerfile_path="$PWD/Dockerfile.devbox"
+  else
+    dockerfile_path="$(get_script_directory)/Dockerfile.devbox"
   fi
 
-  # Check if Dockerfile exists
-  if [ ! -f "$dockerfile_path" ]; then
-    return 1  # No Dockerfile, can't rebuild
+  # Check if image exists
+  if ! image_exists; then
+    return 0  # Image doesn't exist, needs build
   fi
 
   # Get current Dockerfile hash and stored hash
@@ -121,10 +166,14 @@ needs_rebuild() {
 # Function to build the Docker image
 build_image() {
   local dockerfile_path
-  dockerfile_path=$(get_dockerfile_path)
+  if [ -f "Dockerfile.devbox" ]; then
+    dockerfile_path="$PWD/Dockerfile.devbox"
+  else
+    dockerfile_path="$(get_script_directory)/Dockerfile.devbox"
+  fi
 
   if [ ! -f "$dockerfile_path" ]; then
-    echo "${RED}Error: Dockerfile not found at $dockerfile_path${BLACK}"
+    print_error "Dockerfile not found at $dockerfile_path"
     return 1
   fi
 
@@ -133,46 +182,37 @@ build_image() {
   dockerfile_hash=$(get_dockerfile_hash "$dockerfile_path")
 
   echo "Building Docker image '$IMAGE_NAME'..."
-  if [ -n "$DOCKERFILE_PATH" ]; then
+  if [ -f "Dockerfile.devbox" ]; then
     # Project-specific build from current directory
-    if ! docker build -f "$DOCKERFILE_PATH" -t "$IMAGE_NAME" --label "dockerfile.hash=$dockerfile_hash" .; then
-      echo "${RED}Error: Failed to build Docker image.${BLACK}"
+    if ! docker build -f "Dockerfile.devbox" -t "$IMAGE_NAME" --label "dockerfile.hash=$dockerfile_hash" .; then
+      print_error "Failed to build Docker image."
       return 1
     fi
   else
     # Default build from devbox repo directory
-    SCRIPT_PATH="$0"
-    while [ -L "$SCRIPT_PATH" ]; do
-      SCRIPT_PATH="$(readlink "$SCRIPT_PATH")"
-    done
-    SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
-
-    if ! docker build -f "$SCRIPT_DIR/Dockerfile.devbox" -t "$IMAGE_NAME" --label "dockerfile.hash=$dockerfile_hash" "$SCRIPT_DIR"; then
-      echo "${RED}Error: Failed to build Docker image.${BLACK}"
+    local script_dir
+    script_dir=$(get_script_directory)
+    if ! docker build -f "$script_dir/Dockerfile.devbox" -t "$IMAGE_NAME" --label "dockerfile.hash=$dockerfile_hash" "$script_dir"; then
+      print_error "Failed to build Docker image."
       return 1
     fi
   fi
 
-  echo "✅ Successfully built $IMAGE_NAME image."
+  print_success "Successfully built $IMAGE_NAME image."
   return 0
 }
 
 # Function to check if Dockerfile exists and image is built/current
 check_dockerfile_and_image() {
-  local dockerfile_path
-  dockerfile_path=$(get_dockerfile_path)
-
-  if [ -n "$DOCKERFILE_PATH" ]; then
-    # Project-specific container: check for local Dockerfile
-    if [ ! -f "$DOCKERFILE_PATH" ]; then
-      echo "${RED}Error: No $DOCKERFILE_PATH found in current directory.${BLACK}"
-      echo "Run 'devbox init' to create a Dockerfile.devbox from template."
-      return 1
-    fi
+  if [ -f "Dockerfile.devbox" ]; then
+    # Project-specific container: local Dockerfile exists
+    :  # no-op, file exists
   else
     # Default container: check for devbox Dockerfile in script directory
+    local dockerfile_path
+    dockerfile_path="$(get_script_directory)/Dockerfile.devbox"
     if [ ! -f "$dockerfile_path" ]; then
-      echo "${RED}Error: Default Dockerfile.devbox not found at $dockerfile_path${BLACK}"
+      print_error "Default Dockerfile.devbox not found at $dockerfile_path"
       echo "Please ensure devbox is properly installed."
       return 1
     fi
@@ -202,19 +242,10 @@ attach_devbox() {
     return 1
   fi
 
-  # Auto-start container if it exists but is stopped
-  if docker ps -a --format '{{.Names}}' | grep -q "^$CONTAINER_NAME$"; then
-    if [ "$(docker inspect -f '{{.State.Running}}' "$CONTAINER_NAME")" = "false" ]; then
-      echo "Starting stopped container $CONTAINER_NAME..."
-      docker start "$CONTAINER_NAME"
-    fi
-  else
-    # Create and start new container if it doesn't exist
-    echo "Creating new container $CONTAINER_NAME..."
-    PORT=${PORT:-3000}
-    docker run -d -p "$PORT:$PORT" -e "PORT=$PORT" --name "$CONTAINER_NAME" -v "$PWD":/"$PROJECT_NAME" "$IMAGE_NAME" tail -f /dev/null
-  fi
+  # Start container (create if needed)
+  start_container
 
+  # Attach to the container
   docker exec -it -w "/$PROJECT_NAME" "$CONTAINER_NAME" /bin/zsh
 }
 
@@ -226,114 +257,37 @@ init_devbox() {
     return 1
   fi
 
-  # Get the directory of the devbox script (resolve symlinks)
-  SCRIPT_PATH="$0"
-  while [ -L "$SCRIPT_PATH" ]; do
-    SCRIPT_PATH="$(readlink "$SCRIPT_PATH")"
-  done
-  SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
+  local script_dir template_path
+  script_dir=$(get_script_directory)
+  template_path="$script_dir/Dockerfile.devbox"
 
-  if [ -f "$SCRIPT_DIR/Dockerfile.devbox" ]; then
-    cp "$SCRIPT_DIR/Dockerfile.devbox" "./Dockerfile.devbox"
+  if [ -f "$template_path" ]; then
+    cp "$template_path" "./Dockerfile.devbox"
     echo "Created Dockerfile.devbox from template in current directory."
     echo "Edit the Dockerfile.devbox to customize tools for your project."
     echo "This project will now use container: devbox-$PROJECT_NAME"
   else
-    echo "${RED}Error: Dockerfile.devbox not found in devbox installation directory.${BLACK}"
+    print_error "Dockerfile.devbox not found in devbox installation directory."
     echo "Please ensure devbox is properly installed."
     return 1
   fi
 }
 
-# Function to cleanup old devbox containers and images
-cleanup_devbox() {
-  echo "Cleaning up devbox containers and images older than 30 days..."
-
-  # Find and remove old containers (both running and stopped)
-  OLD_CONTAINERS=$(docker ps -a --filter "ancestor=devbox" --format "{{.Names}} {{.CreatedAt}}" | while read name created; do
-    # Convert created date to seconds since epoch
-    created_seconds=$(date -j -f "%Y-%m-%d %H:%M:%S" "$created" "+%s" 2>/dev/null || echo "0")
-    current_seconds=$(date "+%s")
-    age_days=$(( (current_seconds - created_seconds) / 86400 ))
-
-    if [ "$age_days" -gt 30 ]; then
-      echo "$name"
-    fi
-  done)
-
-  if [ -n "$OLD_CONTAINERS" ]; then
-    echo "Found old containers to remove:"
-    echo "$OLD_CONTAINERS"
-    printf "Remove these containers? (y/N): "
-    read -r response
-    case "$response" in
-      [yY][eE][sS]|[yY])
-        echo "$OLD_CONTAINERS" | while read container; do
-          if [ -n "$container" ]; then
-            echo "Removing container: $container"
-            docker stop "$container" 2>/dev/null || true
-            docker rm "$container" 2>/dev/null || true
-          fi
-        done
-        ;;
-      *)
-        echo "Skipping container cleanup."
-        ;;
-    esac
-  else
-    echo "No old containers found."
-  fi
-
-  # Find and remove old devbox images
-  OLD_IMAGES=$(docker images --filter "reference=devbox" --format "{{.Repository}}:{{.Tag}} {{.CreatedAt}}" | while read image created; do
-    created_seconds=$(date -j -f "%Y-%m-%d %H:%M:%S" "$created" "+%s" 2>/dev/null || echo "0")
-    current_seconds=$(date "+%s")
-    age_days=$(( (current_seconds - created_seconds) / 86400 ))
-
-    if [ "$age_days" -gt 30 ]; then
-      echo "$image"
-    fi
-  done)
-
-  if [ -n "$OLD_IMAGES" ]; then
-    echo "Found old images to remove:"
-    echo "$OLD_IMAGES"
-    printf "Remove these images? (y/N): "
-    read -r response
-    case "$response" in
-      [yY][eE][sS]|[yY])
-        echo "$OLD_IMAGES" | while read image; do
-          if [ -n "$image" ]; then
-            echo "Removing image: $image"
-            docker rmi "$image" 2>/dev/null || true
-          fi
-        done
-        ;;
-      *)
-        echo "Skipping image cleanup."
-        ;;
-    esac
-  else
-    echo "No old images found."
-  fi
-
-  # Clean up dangling images
-  echo "Cleaning up dangling images..."
-  docker image prune -f
-
-  echo "Cleanup complete."
-}
 
 # Function to show status of the devbox image and container
 show_status() {
   local dockerfile_path
-  dockerfile_path=$(get_dockerfile_path)
+  if [ -f "Dockerfile.devbox" ]; then
+    dockerfile_path="$PWD/Dockerfile.devbox"
+  else
+    dockerfile_path="$(get_script_directory)/Dockerfile.devbox"
+  fi
 
   echo "$PROJECT_NAME"
   printf "  Dockerfile: %s\n" "$dockerfile_path"
 
   # Check if image exists and determine status
-  if ! docker image inspect "$IMAGE_NAME" >/dev/null 2>&1; then
+  if ! image_exists; then
     printf "  Image:       %s " "$IMAGE_NAME"
     printf "${YELLOW}[NOT BUILT]${BLACK}\n"
   else
@@ -348,8 +302,8 @@ show_status() {
 
   # Check container status
   printf "  Container:   %s " "$CONTAINER_NAME"
-  if docker ps -a --format '{{.Names}}' | grep -q "^$CONTAINER_NAME$"; then
-    if [ "$(docker inspect -f '{{.State.Running}}' "$CONTAINER_NAME" 2>/dev/null)" = "true" ]; then
+  if container_exists; then
+    if container_is_running; then
       printf "${GREEN}[RUNNING]${BLACK}\n"
     else
       printf "${YELLOW}[STOPPED]${BLACK}\n"
@@ -366,11 +320,15 @@ build_devbox() {
   fi
 
   local dockerfile_path
-  dockerfile_path=$(get_dockerfile_path)
+  if [ -f "Dockerfile.devbox" ]; then
+    dockerfile_path="$PWD/Dockerfile.devbox"
+  else
+    dockerfile_path="$(get_script_directory)/Dockerfile.devbox"
+  fi
 
   if [ ! -f "$dockerfile_path" ]; then
-    echo "${RED}Error: Dockerfile not found at $dockerfile_path${BLACK}"
-    if [ -z "$DOCKERFILE_PATH" ]; then
+    print_error "Dockerfile not found at $dockerfile_path"
+    if [ ! -f "Dockerfile.devbox" ]; then
       echo "Run 'devbox init' to create a project-specific Dockerfile.devbox"
     fi
     return 1
@@ -386,19 +344,19 @@ delete_devbox() {
   fi
 
   # Stop and delete the container if it exists
-  if docker ps -a --format '{{.Names}}' | grep -q "^$CONTAINER_NAME$"; then
+  if container_exists; then
     echo "Stopping and deleting container $CONTAINER_NAME..."
-    docker stop -t 0 "$CONTAINER_NAME" 2>/dev/null || true
+    docker stop -t "$DOCKER_STOP_TIMEOUT" "$CONTAINER_NAME" 2>/dev/null || true
     docker rm "$CONTAINER_NAME" 2>/dev/null || true
   fi
 
   # Delete the image if it exists
-  if docker image inspect "$IMAGE_NAME" >/dev/null 2>&1; then
+  if image_exists; then
     echo "Deleting Docker image '$IMAGE_NAME'..."
     if docker rmi "$IMAGE_NAME" 2>/dev/null; then
-      echo "✅ Successfully deleted image '$IMAGE_NAME'"
+      print_success "Successfully deleted image '$IMAGE_NAME'"
     else
-      echo "${RED}Error: Failed to delete image '$IMAGE_NAME'${BLACK}"
+      print_error "Failed to delete image '$IMAGE_NAME'"
       return 1
     fi
   else
@@ -410,9 +368,6 @@ delete_devbox() {
 case "$1" in
   init)
     init_devbox
-    ;;
-  cleanup)
-    cleanup_devbox
     ;;
   status)
     show_status
@@ -433,64 +388,23 @@ case "$1" in
       exit 1
     fi
 
-    if docker ps -a --format '{{.Names}}' | grep -q "^$CONTAINER_NAME$"; then
-      if [ "$(docker inspect -f '{{.State.Running}}' "$CONTAINER_NAME")" = "false" ]; then
-        echo "Starting stopped container $CONTAINER_NAME..."
-        docker start "$CONTAINER_NAME"
-      else
-        echo "Container $CONTAINER_NAME is already running."
-      fi
-    else
-      echo "Creating new container $CONTAINER_NAME..."
-      PORT=${PORT:-3000}
-      docker run -d -p "$PORT:$PORT" -e "PORT=$PORT" --name "$CONTAINER_NAME" -v "$PWD":/"$PROJECT_NAME" "$IMAGE_NAME" tail -f /dev/null
-    fi
+    start_container
     ;;
   stop)
-    # Stop container and delete the container
-    if docker ps -a --format '{{.Names}}' | grep -q "^$CONTAINER_NAME$"; then
-      echo "Stopping and deleting container $CONTAINER_NAME..."
-      # Stop immediately without waiting, then remove
-      docker stop -t 0 "$CONTAINER_NAME" 2>/dev/null || true
-      docker rm "$CONTAINER_NAME"
-    else
-      echo "Container $CONTAINER_NAME does not exist."
-    fi
-    ;;
-  destroy)
-    # Stop and remove container
-    if docker ps -a --format '{{.Names}}' | grep -q "^$CONTAINER_NAME$"; then
-      echo "Destroying container $CONTAINER_NAME..."
-      docker stop "$CONTAINER_NAME" 2>/dev/null || true
-      docker rm "$CONTAINER_NAME"
-    else
-      echo "Container $CONTAINER_NAME does not exist."
-    fi
+    stop_container
     ;;
   "")
     attach_devbox
     ;;
-  help|--help|-h)
-    echo "Usage: $0"
+  help|--help|-h|*)
+    echo "Usage: $0 [COMMAND]"
     echo ""
     echo "Commands:"
     echo "  (no args)  - Create the devbox and attach to it."
     echo "  status     - Show status of devbox Dockerfile, image, and container."
     echo "  init       - Copy Dockerfile.devbox template to current directory for a project-specific devbox."
     echo "  build      - Build/rebuild the devbox Docker image"
-    echo "  delete     - Stops the container, deletes it, and deletes the image."
-    echo "  start      - Start the container."
-    echo "  stop       - Stop the container and delete the container."
-    ;;
-  *)
-    echo "Usage: $0"
-    echo ""
-    echo "Commands:"
-    echo "  (no args)  - Create the devbox and attach to it."
-    echo "  status     - Show status of devbox Dockerfile, image, and container."
-    echo "  init       - Copy Dockerfile.devbox template to current directory for a project-specific devbox."
-    echo "  build      - Build/rebuild the devbox Docker image"
-    echo "  delete     - Stops the container, deletes it, and deletes the image."
+    echo "  delete     - Stop the container, delete it, and delete the image."
     echo "  start      - Start the container."
     echo "  stop       - Stop the container and delete the container."
     ;;

@@ -26,7 +26,6 @@ Testing
 devbox build
 ```
 
-Better help.
 
 ❯ devbox help
 Usage: /usr/local/bin/devbox
@@ -41,11 +40,14 @@ Commands:
   stop       - Stop the container and delete the container.
 
 
+
 Lets do an audit of this script and come up with a refactoring plan. Lets try to reduce the amount of redundancy, and lets make use of functions and variables to help provide more readability and clarity.
 
 
 
-I think instead, container names should be `$proj-devbox` so each
+
+
+Currently container names are called $project but I'd like the container names should be `$project-devbox` so we can easily tell which containers and images are devboxes. Same goes with custom images -- those should also be called $project-devbox instead of just $project.
 
 
 zsh inside look better.
