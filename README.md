@@ -53,3 +53,30 @@ devbox destroy
 #$ docker rm "$X"
 ```
 
+
+```sh
+# stop all containers
+docker stop $(docker ps -q)
+# delete all stopped containers
+docker container prune -f
+# delete all images
+```
+
+
+
+```sh
+# running containers
+docker ps
+# all containers
+docker ps -a
+# images
+docker image ls
+```
+
+Testing
+```sh
+devbox path
+devbox build
+```
+
+devbox status

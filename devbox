@@ -1,20 +1,35 @@
 #!/bin/sh
 
+# Color variables for output formatting
+RED='\033[31m'
+BLACK='\033[0m'
+
 # Get the name of the current directory and assign it to X
-X=$(basename "$PWD")
+PROJECT_NAME=$(basename "$PWD")
+
+# Determine container name and image based on presence of local Dockerfile.devbox
+if [ -f "Dockerfile.devbox" ]; then
+  CONTAINER_NAME="devbox-$PROJECT_NAME"
+  IMAGE_NAME="devbox-$PROJECT_NAME"
+  DOCKERFILE_PATH="Dockerfile.devbox"
+else
+  CONTAINER_NAME="$PROJECT_NAME"
+  IMAGE_NAME="devbox"
+  DOCKERFILE_PATH=""
+fi
 
 # Function to check prerequisites
 check_prerequisites() {
   # Check if docker command exists
   if ! command -v docker >/dev/null 2>&1; then
-    echo "Error: Docker is not installed."
+    echo "${RED}Error: Docker is not installed.${BLACK}"
     echo "Please install Docker: brew install docker"
     return 1
   fi
 
   # Check if orb command exists (for OrbStack)
   if ! command -v orb >/dev/null 2>&1; then
-    echo "Error: OrbStack is not installed."
+    echo "${RED}Error: OrbStack is not installed.${BLACK}"
     echo "Please install OrbStack: brew install orbstack"
     return 1
   fi
@@ -22,15 +37,15 @@ check_prerequisites() {
   # Check if OrbStack is running
   if ! orb status >/dev/null 2>&1; then
     echo "OrbStack is not running. Starting OrbStack..."
-    orb >/dev/null 2>&1
+    orb start
     # Wait a moment for OrbStack to start
-    sleep 3
-    echo "OrbStack started successfully."
+    # sleep 3
+    echo "✅ OrbStack started successfully."
   fi
 
   # Check if Docker daemon is accessible
   if ! docker info >/dev/null 2>&1; then
-    echo "Error: Docker daemon is not accessible."
+    echo "${RED}Error: Docker daemon is not accessible.${BLACK}"
     echo "Please ensure Docker/OrbStack is running properly."
     return 1
   fi
@@ -38,22 +53,119 @@ check_prerequisites() {
   return 0
 }
 
-# Function to check if Dockerfile exists and image is built
-check_dockerfile_and_image() {
-  if [ ! -f "Dockerfile" ]; then
-    echo "Error: No Dockerfile found in current directory."
-    echo "Run 'devbox init' to create a Dockerfile from template."
+# Function to get the path to the Dockerfile being used
+get_dockerfile_path() {
+  if [ -n "$DOCKERFILE_PATH" ]; then
+    echo "$PWD/$DOCKERFILE_PATH"
+  else
+    # Get the directory of the devbox script (resolve symlinks)
+    SCRIPT_PATH="$0"
+    while [ -L "$SCRIPT_PATH" ]; do
+      SCRIPT_PATH="$(readlink "$SCRIPT_PATH")"
+    done
+    SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
+    echo "$SCRIPT_DIR/Dockerfile.devbox"
+  fi
+}
+
+# Function to check if image needs rebuilding
+needs_rebuild() {
+  local dockerfile_path
+  dockerfile_path=$(get_dockerfile_path)
+
+  # Check if image exists
+  if ! docker image inspect "$IMAGE_NAME" >/dev/null 2>&1; then
+    return 0  # Image doesn't exist, needs build
+  fi
+
+  # Check if Dockerfile exists
+  if [ ! -f "$dockerfile_path" ]; then
+    return 1  # No Dockerfile, can't rebuild
+  fi
+
+  # Get image creation time and Dockerfile modification time
+  local image_created dockerfile_modified
+  image_created=$(docker image inspect "$IMAGE_NAME" --format '{{.Created}}' 2>/dev/null)
+  dockerfile_modified=$(stat -f "%Sm" -t "%Y-%m-%dT%H:%M:%S" "$dockerfile_path" 2>/dev/null)
+
+  if [ -z "$image_created" ] || [ -z "$dockerfile_modified" ]; then
+    return 0  # Can't determine, assume rebuild needed
+  fi
+
+  # Convert to seconds for comparison
+  image_seconds=$(date -j -f "%Y-%m-%dT%H:%M:%S" "${image_created%.*}" "+%s" 2>/dev/null || echo "0")
+  dockerfile_seconds=$(date -j -f "%Y-%m-%dT%H:%M:%S" "$dockerfile_modified" "+%s" 2>/dev/null || echo "0")
+
+  if [ "$dockerfile_seconds" -gt "$image_seconds" ]; then
+    return 0  # Dockerfile is newer, needs rebuild
+  fi
+
+  return 1  # No rebuild needed
+}
+
+# Function to build the Docker image
+build_image() {
+  local dockerfile_path
+  dockerfile_path=$(get_dockerfile_path)
+
+  if [ ! -f "$dockerfile_path" ]; then
+    echo "${RED}Error: Dockerfile not found at $dockerfile_path${BLACK}"
     return 1
   fi
 
-  # Check if devbox image exists
-  if ! docker image inspect devbox >/dev/null 2>&1; then
-    echo "Docker image 'devbox' not found. Building image..."
-    if ! docker build -t devbox .; then
-      echo "Error: Failed to build Docker image."
+  echo "Building Docker image '$IMAGE_NAME'..."
+  if [ -n "$DOCKERFILE_PATH" ]; then
+    # Project-specific build from current directory
+    if ! docker build -f "$DOCKERFILE_PATH" -t "$IMAGE_NAME" .; then
+      echo "${RED}Error: Failed to build Docker image.${BLACK}"
       return 1
     fi
-    echo "Successfully built devbox image."
+  else
+    # Default build from devbox repo directory
+    SCRIPT_PATH="$0"
+    while [ -L "$SCRIPT_PATH" ]; do
+      SCRIPT_PATH="$(readlink "$SCRIPT_PATH")"
+    done
+    SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
+
+    if ! docker build -f "$SCRIPT_DIR/Dockerfile.devbox" -t "$IMAGE_NAME" "$SCRIPT_DIR"; then
+      echo "${RED}Error: Failed to build Docker image.${BLACK}"
+      return 1
+    fi
+  fi
+
+  echo "✅ Successfully built $IMAGE_NAME image."
+  return 0
+}
+
+# Function to check if Dockerfile exists and image is built/current
+check_dockerfile_and_image() {
+  local dockerfile_path
+  dockerfile_path=$(get_dockerfile_path)
+
+  if [ -n "$DOCKERFILE_PATH" ]; then
+    # Project-specific container: check for local Dockerfile
+    if [ ! -f "$DOCKERFILE_PATH" ]; then
+      echo "${RED}Error: No $DOCKERFILE_PATH found in current directory.${BLACK}"
+      echo "Run 'devbox init' to create a Dockerfile.devbox from template."
+      return 1
+    fi
+  else
+    # Default container: check for devbox Dockerfile in script directory
+    if [ ! -f "$dockerfile_path" ]; then
+      echo "${RED}Error: Default Dockerfile.devbox not found at $dockerfile_path${BLACK}"
+      echo "Please ensure devbox is properly installed."
+      return 1
+    fi
+  fi
+
+  # Check if image exists and is current
+  if ! docker image inspect "$IMAGE_NAME" >/dev/null 2>&1; then
+    echo "Docker image '$IMAGE_NAME' not found. Building image..."
+    build_image
+  elif needs_rebuild; then
+    echo "Dockerfile has been modified. Rebuilding image..."
+    build_image
   fi
 
   return 0
@@ -72,30 +184,34 @@ attach_devbox() {
   fi
 
   # Auto-start container if it exists but is stopped
-  if docker ps -a --format '{{.Names}}' | grep -q "^$X$"; then
-    if [ "$(docker inspect -f '{{.State.Running}}' "$X")" = "false" ]; then
-      echo "Starting stopped container $X..."
-      docker start "$X"
+  if docker ps -a --format '{{.Names}}' | grep -q "^$CONTAINER_NAME$"; then
+    if [ "$(docker inspect -f '{{.State.Running}}' "$CONTAINER_NAME")" = "false" ]; then
+      echo "Starting stopped container $CONTAINER_NAME..."
+      docker start "$CONTAINER_NAME"
     fi
   else
     # Create and start new container if it doesn't exist
-    echo "Creating new container $X..."
-    docker run -d -P --name "$X" -v "$PWD":/"$X" devbox tail -f /dev/null
+    echo "Creating new container $CONTAINER_NAME..."
+    docker run -d -P --name "$CONTAINER_NAME" -v "$PWD":/"$PROJECT_NAME" "$IMAGE_NAME" tail -f /dev/null
   fi
 
-  docker exec -it -w "/$X" "$X" /bin/zsh
+  docker exec -it -w "/$PROJECT_NAME" "$CONTAINER_NAME" /bin/zsh
 }
 
 # Function to list all running devbox containers
 list_devboxes() {
   echo "Running devbox containers:"
+  # Show both default devbox containers and project-specific devbox-* containers
   docker ps --filter "ancestor=devbox" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+  docker ps --filter "label=devbox-project" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null || true
+  # Also show containers with devbox-* image pattern
+  docker ps | grep "devbox-" | awk '{print $NF "\t" $(NF-1) "\t" $1}' 2>/dev/null || true
 }
 
 # Function to initialize a new devbox project
 init_devbox() {
-  if [ -f "Dockerfile" ]; then
-    echo "Dockerfile already exists in current directory."
+  if [ -f "Dockerfile.devbox" ]; then
+    echo "Dockerfile.devbox already exists in current directory."
     echo "Remove it first if you want to reinitialize."
     return 1
   fi
@@ -107,12 +223,13 @@ init_devbox() {
   done
   SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
 
-  if [ -f "$SCRIPT_DIR/Dockerfile.template" ]; then
-    cp "$SCRIPT_DIR/Dockerfile.template" "./Dockerfile"
-    echo "Created Dockerfile from template in current directory."
-    echo "Edit the Dockerfile to uncomment the tools you need for your project."
+  if [ -f "$SCRIPT_DIR/Dockerfile.devbox" ]; then
+    cp "$SCRIPT_DIR/Dockerfile.devbox" "./Dockerfile.devbox"
+    echo "Created Dockerfile.devbox from template in current directory."
+    echo "Edit the Dockerfile.devbox to customize tools for your project."
+    echo "This project will now use container: devbox-$PROJECT_NAME"
   else
-    echo "Error: Dockerfile.template not found in devbox installation directory."
+    echo "${RED}Error: Dockerfile.devbox not found in devbox installation directory.${BLACK}"
     echo "Please ensure devbox is properly installed."
     return 1
   fi
@@ -197,6 +314,119 @@ cleanup_devbox() {
   echo "Cleanup complete."
 }
 
+# Function to show the path to the Dockerfile being used
+show_path() {
+  local dockerfile_path
+  dockerfile_path=$(get_dockerfile_path)
+
+  if [ -n "$DOCKERFILE_PATH" ]; then
+    echo "Using project-specific Dockerfile: $dockerfile_path"
+    echo "Container name: $CONTAINER_NAME"
+    echo "Image name: $IMAGE_NAME"
+  else
+    echo "Using default Dockerfile: $dockerfile_path"
+    echo "Container name: $CONTAINER_NAME"
+    echo "Image name: $IMAGE_NAME"
+  fi
+}
+
+# Function to show status of the devbox image and container
+show_status() {
+  local dockerfile_path
+  dockerfile_path=$(get_dockerfile_path)
+
+  echo "Project: $PROJECT_NAME"
+  echo "Dockerfile: $dockerfile_path"
+
+  # Check if image exists
+  if ! docker image inspect "$IMAGE_NAME" >/dev/null 2>&1; then
+    echo "Image: ❌ NOT BUILT"
+    return 0
+  else
+    # Check if rebuild is needed
+    if needs_rebuild; then
+      echo "Image: $IMAGE_NAME 🔄 REBUILD NEEDED (Dockerfile modified)"
+    else
+      echo "Image: $IMAGE_NAME ✅ BUILT AND UP TO DATE"
+    fi
+  fi
+
+  # Check container status
+  if docker ps -a --format '{{.Names}}' | grep -q "^$CONTAINER_NAME$"; then
+    if [ "$(docker inspect -f '{{.State.Running}}' "$CONTAINER_NAME" 2>/dev/null)" = "true" ]; then
+      echo "Container: $CONTAINER_NAME ✅ RUNNING"
+    else
+      echo "Container: $CONTAINER_NAME 🛑 STOPPED"
+    fi
+  else
+    echo "Container: $CONTAINER_NAME ❌ NOT CREATED"
+  fi
+}
+
+# Function to build/rebuild the devbox image
+build_devbox() {
+  if ! check_prerequisites; then
+    return 1
+  fi
+
+  local dockerfile_path
+  dockerfile_path=$(get_dockerfile_path)
+
+  if [ ! -f "$dockerfile_path" ]; then
+    echo "${RED}Error: Dockerfile not found at $dockerfile_path${BLACK}"
+    if [ -z "$DOCKERFILE_PATH" ]; then
+      echo "Run 'devbox init' to create a project-specific Dockerfile.devbox"
+    fi
+    return 1
+  fi
+
+  build_image
+}
+
+# Function to delete the devbox image
+delete_devbox() {
+  if ! check_prerequisites; then
+    return 1
+  fi
+
+  # Check if image exists
+  if ! docker image inspect "$IMAGE_NAME" >/dev/null 2>&1; then
+    echo "Docker image '$IMAGE_NAME' does not exist."
+    return 0
+  fi
+
+  # Check if any containers are using this image
+  CONTAINERS_USING_IMAGE=$(docker ps -a --filter "ancestor=$IMAGE_NAME" --format "{{.Names}}" | tr '\n' ' ')
+
+  if [ -n "$CONTAINERS_USING_IMAGE" ]; then
+    echo "The following containers are using image '$IMAGE_NAME':"
+    echo "$CONTAINERS_USING_IMAGE"
+    printf "Stop and remove these containers before deleting the image? (y/N): "
+    read -r response
+    case "$response" in
+      [yY][eE][sS]|[yY])
+        for container in $CONTAINERS_USING_IMAGE; do
+          echo "Stopping and removing container: $container"
+          docker stop "$container" 2>/dev/null || true
+          docker rm "$container" 2>/dev/null || true
+        done
+        ;;
+      *)
+        echo "Cannot delete image while containers are using it."
+        return 1
+        ;;
+    esac
+  fi
+
+  echo "Deleting Docker image '$IMAGE_NAME'..."
+  if docker rmi "$IMAGE_NAME" 2>/dev/null; then
+    echo "✅ Successfully deleted image '$IMAGE_NAME'"
+  else
+    echo "${RED}Error: Failed to delete image '$IMAGE_NAME'${BLACK}"
+    return 1
+  fi
+}
+
 # Check the command argument
 case "$1" in
   list)
@@ -208,10 +438,81 @@ case "$1" in
   cleanup)
     cleanup_devbox
     ;;
+  path)
+    show_path
+    ;;
+  status)
+    show_status
+    ;;
+  build)
+    build_devbox
+    ;;
+  delete)
+    delete_devbox
+    ;;
+  start)
+    # Explicitly start container (existing functionality)
+    if ! check_prerequisites; then
+      exit 1
+    fi
+
+    if ! check_dockerfile_and_image; then
+      exit 1
+    fi
+
+    if docker ps -a --format '{{.Names}}' | grep -q "^$CONTAINER_NAME$"; then
+      if [ "$(docker inspect -f '{{.State.Running}}' "$CONTAINER_NAME")" = "false" ]; then
+        echo "Starting stopped container $CONTAINER_NAME..."
+        docker start "$CONTAINER_NAME"
+      else
+        echo "Container $CONTAINER_NAME is already running."
+      fi
+    else
+      echo "Creating new container $CONTAINER_NAME..."
+      docker run -d -P --name "$CONTAINER_NAME" -v "$PWD":/"$PROJECT_NAME" "$IMAGE_NAME" tail -f /dev/null
+    fi
+    ;;
+  stop)
+    # Stop container without removing
+    if docker ps --format '{{.Names}}' | grep -q "^$CONTAINER_NAME$"; then
+      echo "Stopping container $CONTAINER_NAME..."
+      docker stop "$CONTAINER_NAME"
+    else
+      echo "Container $CONTAINER_NAME is not running."
+    fi
+    ;;
+  destroy)
+    # Stop and remove container
+    if docker ps -a --format '{{.Names}}' | grep -q "^$CONTAINER_NAME$"; then
+      echo "Destroying container $CONTAINER_NAME..."
+      docker stop "$CONTAINER_NAME" 2>/dev/null || true
+      docker rm "$CONTAINER_NAME"
+    else
+      echo "Container $CONTAINER_NAME does not exist."
+    fi
+    ;;
   "")
     attach_devbox
     ;;
   *)
-    echo "Usage: $0 {start|stop|destroy|list|init|cleanup}"
+    echo "Usage: $0 {list|init|cleanup|path|status|build|delete|start|stop|destroy}"
+    echo "       $0               # attach to devbox (default)"
+    echo ""
+    echo "Commands:"
+    echo "  (no args)  - Attach to or create devbox container for this directory"
+    echo "  list       - List all running devbox containers"
+    echo "  init       - Copy Dockerfile.devbox template to current directory"
+    echo "  cleanup    - Remove old devbox containers and images"
+    echo ""
+    echo "New commands:"
+    echo "  path       - Show path to Dockerfile being used"
+    echo "  status     - Show status of devbox image and container"
+    echo "  build      - Build/rebuild the devbox image"
+    echo "  delete     - Delete the devbox image (stops containers first)"
+    echo ""
+    echo "Container management:"
+    echo "  start      - Start container (create if doesn't exist)"
+    echo "  stop       - Stop container without removing"
+    echo "  destroy    - Stop and remove container"
     ;;
 esac
