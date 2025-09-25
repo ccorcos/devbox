@@ -27,23 +27,6 @@ devbox build
 ```
 
 
-❯ devbox help
-Usage: /usr/local/bin/devbox
-
-Commands:
-  (no args)  - Create the devbox and attach to it.
-  status     - Show status of devbox Dockerfile, image, and container.
-  init       - Copy Dockerfile.devbox template to current directory for a project-specific devbox.
-  build      - Build/rebuild the devbox Docker image
-  delete     - Stops the container, deletes it, and deletes the image.
-  start      - Start the container.
-  stop       - Stop the container and delete the container.
-
-
-
-Lets do an audit of this script and come up with a refactoring plan. Lets try to reduce the amount of redundancy, and lets make use of functions and variables to help provide more readability and clarity.
-
-
 
 
 
