@@ -385,41 +385,24 @@ delete_devbox() {
     return 1
   fi
 
-  # Check if image exists
-  if ! docker image inspect "$IMAGE_NAME" >/dev/null 2>&1; then
-    echo "Docker image '$IMAGE_NAME' does not exist."
-    return 0
+  # Stop and delete the container if it exists
+  if docker ps -a --format '{{.Names}}' | grep -q "^$CONTAINER_NAME$"; then
+    echo "Stopping and deleting container $CONTAINER_NAME..."
+    docker stop -t 0 "$CONTAINER_NAME" 2>/dev/null || true
+    docker rm "$CONTAINER_NAME" 2>/dev/null || true
   fi
 
-  # Check if any containers are using this image
-  CONTAINERS_USING_IMAGE=$(docker ps -a --filter "ancestor=$IMAGE_NAME" --format "{{.Names}}" | tr '\n' ' ')
-
-  if [ -n "$CONTAINERS_USING_IMAGE" ]; then
-    echo "The following containers are using image '$IMAGE_NAME':"
-    echo "$CONTAINERS_USING_IMAGE"
-    printf "Stop and remove these containers before deleting the image? (y/N): "
-    read -r response
-    case "$response" in
-      [yY][eE][sS]|[yY])
-        for container in $CONTAINERS_USING_IMAGE; do
-          echo "Stopping and removing container: $container"
-          docker stop "$container" 2>/dev/null || true
-          docker rm "$container" 2>/dev/null || true
-        done
-        ;;
-      *)
-        echo "Cannot delete image while containers are using it."
-        return 1
-        ;;
-    esac
-  fi
-
-  echo "Deleting Docker image '$IMAGE_NAME'..."
-  if docker rmi "$IMAGE_NAME" 2>/dev/null; then
-    echo "✅ Successfully deleted image '$IMAGE_NAME'"
+  # Delete the image if it exists
+  if docker image inspect "$IMAGE_NAME" >/dev/null 2>&1; then
+    echo "Deleting Docker image '$IMAGE_NAME'..."
+    if docker rmi "$IMAGE_NAME" 2>/dev/null; then
+      echo "✅ Successfully deleted image '$IMAGE_NAME'"
+    else
+      echo "${RED}Error: Failed to delete image '$IMAGE_NAME'${BLACK}"
+      return 1
+    fi
   else
-    echo "${RED}Error: Failed to delete image '$IMAGE_NAME'${BLACK}"
-    return 1
+    echo "Docker image '$IMAGE_NAME' does not exist."
   fi
 }
 
@@ -464,13 +447,14 @@ case "$1" in
     fi
     ;;
   stop)
-    # Stop container without removing
-    if docker ps --format '{{.Names}}' | grep -q "^$CONTAINER_NAME$"; then
-      echo "Stopping container $CONTAINER_NAME..."
-      # Stop immediately without waiting.
-      docker stop -t 0 "$CONTAINER_NAME"
+    # Stop container and delete the container
+    if docker ps -a --format '{{.Names}}' | grep -q "^$CONTAINER_NAME$"; then
+      echo "Stopping and deleting container $CONTAINER_NAME..."
+      # Stop immediately without waiting, then remove
+      docker stop -t 0 "$CONTAINER_NAME" 2>/dev/null || true
+      docker rm "$CONTAINER_NAME"
     else
-      echo "Container $CONTAINER_NAME is not running."
+      echo "Container $CONTAINER_NAME does not exist."
     fi
     ;;
   destroy)
@@ -486,23 +470,28 @@ case "$1" in
   "")
     attach_devbox
     ;;
-  *)
-    echo "Usage: $0 {list|init|cleanup|path|status|build|delete|start|stop|destroy}"
-    echo "       $0               # attach to devbox (default)"
+  help|--help|-h)
+    echo "Usage: $0"
     echo ""
     echo "Commands:"
-    echo "  (no args)  - Attach to or create devbox container for this directory"
-    echo "  init       - Copy Dockerfile.devbox template to current directory"
-    echo "  cleanup    - Remove old devbox containers and images"
+    echo "  (no args)  - Create the devbox and attach to it."
+    echo "  status     - Show status of devbox Dockerfile, image, and container."
+    echo "  init       - Copy Dockerfile.devbox template to current directory for a project-specific devbox."
+    echo "  build      - Build/rebuild the devbox Docker image"
+    echo "  delete     - Stops the container, deletes it, and deletes the image."
+    echo "  start      - Start the container."
+    echo "  stop       - Stop the container and delete the container."
+    ;;
+  *)
+    echo "Usage: $0"
     echo ""
-    echo "New commands:"
-    echo "  status     - Show status of devbox image and container"
-    echo "  build      - Build/rebuild the devbox image"
-    echo "  delete     - Delete the devbox image (stops containers first)"
-    echo ""
-    echo "Container management:"
-    echo "  start      - Start container (create if doesn't exist)"
-    echo "  stop       - Stop container without removing"
-    echo "  destroy    - Stop and remove container"
+    echo "Commands:"
+    echo "  (no args)  - Create the devbox and attach to it."
+    echo "  status     - Show status of devbox Dockerfile, image, and container."
+    echo "  init       - Copy Dockerfile.devbox template to current directory for a project-specific devbox."
+    echo "  build      - Build/rebuild the devbox Docker image"
+    echo "  delete     - Stops the container, deletes it, and deletes the image."
+    echo "  start      - Start the container."
+    echo "  stop       - Stop the container and delete the container."
     ;;
 esac

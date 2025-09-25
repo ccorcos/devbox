@@ -19,27 +19,12 @@ docker rmi $(docker images -a -q)
 
 ## Devbox Notes
 
-Improve the readability of the output for devbox status to look more like this. Give the [LABEL] text an appropriate color too.
-> cd geocalc
-> devbox status
-geocalc
-  Dockerfile: /Users/chet/Code/devbox/Dockerfile.devbox
-  Image:       devbox [REBUILD NEEDED]
-  Container:   geocalc [NOT CREATED]
-
 
 
 Testing
 ```sh
 devbox build
 ```
-
-
-PORT thing...
-
-
-default shell:   docker exec -it -w "/$PROJECT_NAME" "$CONTAINER_NAME" sh -c 'exec $0'
-
 
 Better help.
 
@@ -56,9 +41,23 @@ Commands:
   stop       - Stop the container and delete the container.
 
 
-Auto-stop?
+Lets do an audit of this script and come up with a refactoring plan. Lets try to reduce the amount of redundancy, and lets make use of functions and variables to help provide more readability and clarity.
+
+
 
 I think instead, container names should be `$proj-devbox` so each
+
+
+zsh inside look better.
+Auto-stop?
+
+
+
+Claudemd better
+claude inside the devbox.
+
+
+
 
 Handle ctrl-c to stop orb, etc.
 
