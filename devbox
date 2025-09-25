@@ -3,6 +3,61 @@
 # Get the name of the current directory and assign it to X
 X=$(basename "$PWD")
 
+# Function to check prerequisites
+check_prerequisites() {
+  # Check if docker command exists
+  if ! command -v docker >/dev/null 2>&1; then
+    echo "Error: Docker is not installed."
+    echo "Please install Docker: brew install docker"
+    return 1
+  fi
+
+  # Check if orb command exists (for OrbStack)
+  if ! command -v orb >/dev/null 2>&1; then
+    echo "Error: OrbStack is not installed."
+    echo "Please install OrbStack: brew install orbstack"
+    return 1
+  fi
+
+  # Check if OrbStack is running
+  if ! orb status >/dev/null 2>&1; then
+    echo "OrbStack is not running. Starting OrbStack..."
+    orb
+    # Wait a moment for OrbStack to start
+    sleep 3
+  fi
+
+  # Check if Docker daemon is accessible
+  if ! docker info >/dev/null 2>&1; then
+    echo "Error: Docker daemon is not accessible."
+    echo "Please ensure Docker/OrbStack is running properly."
+    return 1
+  fi
+
+  return 0
+}
+
+# Function to check if Dockerfile exists and image is built
+check_dockerfile_and_image() {
+  if [ ! -f "Dockerfile" ]; then
+    echo "Error: No Dockerfile found in current directory."
+    echo "Run 'devbox init' to create a Dockerfile from template."
+    return 1
+  fi
+
+  # Check if devbox image exists
+  if ! docker image inspect devbox >/dev/null 2>&1; then
+    echo "Docker image 'devbox' not found. Building image..."
+    if ! docker build -t devbox .; then
+      echo "Error: Failed to build Docker image."
+      return 1
+    fi
+    echo "Successfully built devbox image."
+  fi
+
+  return 0
+}
+
 # Function to start or restart the devbox container
 start_devbox() {
   if docker ps -a --format '{{.Names}}' | grep -q "^$X$"; then
@@ -34,6 +89,27 @@ destroy_devbox() {
 
 # Function to attach to the devbox container
 attach_devbox() {
+  # Check prerequisites and dockerfile/image before attaching
+  if ! check_prerequisites; then
+    return 1
+  fi
+
+  if ! check_dockerfile_and_image; then
+    return 1
+  fi
+
+  # Auto-start container if it exists but is stopped
+  if docker ps -a --format '{{.Names}}' | grep -q "^$X$"; then
+    if [ "$(docker inspect -f '{{.State.Running}}' "$X")" = "false" ]; then
+      echo "Starting stopped container $X..."
+      docker start "$X"
+    fi
+  else
+    # Create and start new container if it doesn't exist
+    echo "Creating new container $X..."
+    docker run -d -P --name "$X" -v "$PWD":/"$X" devbox tail -f /dev/null
+  fi
+
   docker exec -it "$X" /bin/zsh
 }
 
@@ -41,6 +117,107 @@ attach_devbox() {
 list_devboxes() {
   echo "Running devbox containers:"
   docker ps --filter "ancestor=devbox" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+}
+
+# Function to initialize a new devbox project
+init_devbox() {
+  if [ -f "Dockerfile" ]; then
+    echo "Dockerfile already exists in current directory."
+    echo "Remove it first if you want to reinitialize."
+    return 1
+  fi
+
+  # Get the directory of the devbox script
+  SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+  if [ -f "$SCRIPT_DIR/Dockerfile.template" ]; then
+    cp "$SCRIPT_DIR/Dockerfile.template" "./Dockerfile"
+    echo "Created Dockerfile from template in current directory."
+    echo "Edit the Dockerfile to uncomment the tools you need for your project."
+  else
+    echo "Error: Dockerfile.template not found in devbox installation directory."
+    echo "Please ensure devbox is properly installed."
+    return 1
+  fi
+}
+
+# Function to cleanup old devbox containers and images
+cleanup_devbox() {
+  echo "Cleaning up devbox containers and images older than 30 days..."
+
+  # Find and remove old containers (both running and stopped)
+  OLD_CONTAINERS=$(docker ps -a --filter "ancestor=devbox" --format "{{.Names}} {{.CreatedAt}}" | while read name created; do
+    # Convert created date to seconds since epoch
+    created_seconds=$(date -j -f "%Y-%m-%d %H:%M:%S" "$created" "+%s" 2>/dev/null || echo "0")
+    current_seconds=$(date "+%s")
+    age_days=$(( (current_seconds - created_seconds) / 86400 ))
+
+    if [ "$age_days" -gt 30 ]; then
+      echo "$name"
+    fi
+  done)
+
+  if [ -n "$OLD_CONTAINERS" ]; then
+    echo "Found old containers to remove:"
+    echo "$OLD_CONTAINERS"
+    printf "Remove these containers? (y/N): "
+    read -r response
+    case "$response" in
+      [yY][eE][sS]|[yY])
+        echo "$OLD_CONTAINERS" | while read container; do
+          if [ -n "$container" ]; then
+            echo "Removing container: $container"
+            docker stop "$container" 2>/dev/null || true
+            docker rm "$container" 2>/dev/null || true
+          fi
+        done
+        ;;
+      *)
+        echo "Skipping container cleanup."
+        ;;
+    esac
+  else
+    echo "No old containers found."
+  fi
+
+  # Find and remove old devbox images
+  OLD_IMAGES=$(docker images --filter "reference=devbox" --format "{{.Repository}}:{{.Tag}} {{.CreatedAt}}" | while read image created; do
+    created_seconds=$(date -j -f "%Y-%m-%d %H:%M:%S" "$created" "+%s" 2>/dev/null || echo "0")
+    current_seconds=$(date "+%s")
+    age_days=$(( (current_seconds - created_seconds) / 86400 ))
+
+    if [ "$age_days" -gt 30 ]; then
+      echo "$image"
+    fi
+  done)
+
+  if [ -n "$OLD_IMAGES" ]; then
+    echo "Found old images to remove:"
+    echo "$OLD_IMAGES"
+    printf "Remove these images? (y/N): "
+    read -r response
+    case "$response" in
+      [yY][eE][sS]|[yY])
+        echo "$OLD_IMAGES" | while read image; do
+          if [ -n "$image" ]; then
+            echo "Removing image: $image"
+            docker rmi "$image" 2>/dev/null || true
+          fi
+        done
+        ;;
+      *)
+        echo "Skipping image cleanup."
+        ;;
+    esac
+  else
+    echo "No old images found."
+  fi
+
+  # Clean up dangling images
+  echo "Cleaning up dangling images..."
+  docker image prune -f
+
+  echo "Cleanup complete."
 }
 
 # Check the command argument
@@ -57,10 +234,16 @@ case "$1" in
   list)
     list_devboxes
     ;;
+  init)
+    init_devbox
+    ;;
+  cleanup)
+    cleanup_devbox
+    ;;
   "")
     attach_devbox
     ;;
   *)
-    echo "Usage: $0 {start|stop|destroy|list}"
+    echo "Usage: $0 {start|stop|destroy|list|init|cleanup}"
     ;;
 esac

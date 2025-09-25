@@ -1,0 +1,124 @@
+# Devbox Development Environment Template
+# This template includes commented sections for common development tools.
+# Uncomment the sections you need for your project.
+
+FROM ubuntu:latest
+
+# Update package lists
+RUN apt-get update
+
+# =============================================================================
+# CORE UTILITIES
+# =============================================================================
+RUN apt-get install -y \
+    git \
+    git-extras \
+    curl \
+    wget \
+    openssl \
+    build-essential \
+    cmake \
+    gnupg \
+    jq \
+    tldr \
+    sqlite3 \
+    iputils-ping \
+    locales
+
+# =============================================================================
+# SHELL ENVIRONMENT
+# =============================================================================
+
+# Install Zsh with Prezto
+RUN apt-get install -y zsh && \
+    git clone --recursive https://github.com/sorin-ionescu/prezto.git /root/.zprezto && \
+    zsh -c 'setopt EXTENDED_GLOB; for rcfile in /root/.zprezto/runcoms/^README.md(.N); do ln -s "$rcfile" "/root/.${rcfile:t}"; done'
+
+# Install z command for directory jumping
+RUN curl -L https://raw.githubusercontent.com/rupa/z/master/z.sh -o /usr/local/bin/z.sh && \
+    chmod +x /usr/local/bin/z.sh && \
+    mkdir -p /usr/local/share/man/man1 && \
+    curl -L https://raw.githubusercontent.com/rupa/z/master/z.1 -o /usr/local/share/man/man1/z.1
+
+# Set up locale
+RUN locale-gen en_US.UTF-8 && \
+    echo "export LANG=en_US.UTF-8\nexport LANGUAGE=en_US:en\nexport LC_ALL=en_US.UTF-8" >> /root/.zshrc
+
+# =============================================================================
+# PYTHON DEVELOPMENT
+# =============================================================================
+RUN apt-get install -y \
+    python3 \
+    python3-pip \
+    python3-venv \
+    pipx
+
+# RUN pip3 install --upgrade pip poetry virtualenv
+
+# =============================================================================
+# NODE.JS DEVELOPMENT
+# =============================================================================
+RUN apt-get install -y \
+    nodejs \
+    npm
+
+# RUN npm install -g n yarn pnpm @angular/cli create-react-app
+
+# RUN n stable
+
+# =============================================================================
+# DATABASES (Uncomment to enable)
+# =============================================================================
+# PostgreSQL client
+# RUN apt-get install -y postgresql-client
+
+# Redis client
+# RUN apt-get install -y redis-tools
+
+# =============================================================================
+# MEDIA & DOCUMENT PROCESSING (Uncomment to enable)
+# =============================================================================
+
+RUN apt-get install -y \
+    pandoc \
+    ffmpeg \
+    imagemagick \
+    graphicsmagick \
+    libcairo2-dev \
+    libjpeg-dev \
+    libpango1.0-dev \
+    libgif-dev \
+    librsvg2-dev \
+    pkg-config \
+    libreoffice
+
+# =============================================================================
+# ADDITIONAL DEVELOPMENT TOOLS (Uncomment to enable)
+# =============================================================================
+
+# Vim/Neovim
+# RUN apt-get install -y vim neovim
+
+# Tmux
+# RUN apt-get install -y tmux
+
+# htop for system monitoring
+# RUN apt-get install -y htop
+
+# Tree for directory structure
+# RUN apt-get install -y tree
+
+# =============================================================================
+# CLEANUP
+# =============================================================================
+
+RUN apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Set working directory
+WORKDIR /workspace
+
+# Default shell
+CMD ["zsh"]
+
+# Expose common development ports
+EXPOSE 3000 3001 4000 5000 8000 8080 8888 9000
