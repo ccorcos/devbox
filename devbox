@@ -211,7 +211,8 @@ attach_devbox() {
   else
     # Create and start new container if it doesn't exist
     echo "Creating new container $CONTAINER_NAME..."
-    docker run -d -P --name "$CONTAINER_NAME" -v "$PWD":/"$PROJECT_NAME" "$IMAGE_NAME" tail -f /dev/null
+    PORT=${PORT:-3000}
+    docker run -d -p "$PORT:$PORT" -e "PORT=$PORT" --name "$CONTAINER_NAME" -v "$PWD":/"$PROJECT_NAME" "$IMAGE_NAME" tail -f /dev/null
   fi
 
   docker exec -it -w "/$PROJECT_NAME" "$CONTAINER_NAME" /bin/zsh
@@ -458,7 +459,8 @@ case "$1" in
       fi
     else
       echo "Creating new container $CONTAINER_NAME..."
-      docker run -d -P --name "$CONTAINER_NAME" -v "$PWD":/"$PROJECT_NAME" "$IMAGE_NAME" tail -f /dev/null
+      PORT=${PORT:-3000}
+      docker run -d -p "$PORT:$PORT" -e "PORT=$PORT" --name "$CONTAINER_NAME" -v "$PWD":/"$PROJECT_NAME" "$IMAGE_NAME" tail -f /dev/null
     fi
     ;;
   stop)

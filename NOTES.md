@@ -37,6 +37,12 @@ devbox build
 
 PORT thing...
 
+
+default shell:   docker exec -it -w "/$PROJECT_NAME" "$CONTAINER_NAME" sh -c 'exec $0'
+
+
+Better help.
+
 ❯ devbox help
 Usage: /usr/local/bin/devbox
 
@@ -50,53 +56,9 @@ Commands:
   stop       - Stop the container and delete the container.
 
 
-
-
----
-
-
-devbox install should walk me through dependencies and symlink the command.
-devbox cleanup should clean up old images that
-
-
-Can I attach to the same box multiple times?
-Does it stop and remove itself when I exit?
-
-
-
-    echo "Usage: $0 {list|init|cleanup|path|status|build|delete|start|stop|destroy}"
-    echo "       $0               # attach to devbox (default)"
-    echo ""
-    echo "Commands:"
-    echo "  (no args)  - Attach to or create devbox container for this directory"
-    echo "  list       - List all running devbox containers"
-    echo "  init       - Copy Dockerfile.devbox template to current directory"
-    echo "  cleanup    - Remove old devbox containers and images"
-    echo ""
-    echo "New commands:"
-    echo "  path       - Show path to Dockerfile being used"
-    echo "  status     - Show status of devbox image and container"
-    echo "  build      - Build/rebuild the devbox image"
-    echo "  delete     - Delete the devbox image (stops containers first)"
-    echo ""
-    echo "Container management:"
-    echo "  start      - Start container (create if doesn't exist)"
-    echo "  stop       - Stop container without removing"
-    echo "  destroy    - Stop and remove container"
-
-
-
-
----
-
-devbox install
-
-
-
-
+Auto-stop?
 
 I think instead, container names should be `$proj-devbox` so each
-
 
 Handle ctrl-c to stop orb, etc.
 

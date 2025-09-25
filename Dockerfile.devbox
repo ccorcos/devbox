@@ -117,5 +117,4 @@ RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 # Default shell
 CMD ["zsh"]
 
-# Expose common development ports
-EXPOSE 3000
+# Port will be exposed dynamically based on PORT environment variable
