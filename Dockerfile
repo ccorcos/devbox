@@ -33,7 +33,7 @@ RUN apt-get install -y \
 			ffmpeg \
 			imagemagick \
 			graphicsmagick
-			# awscli \
+
 
 # Install z command
 RUN curl -L https://raw.githubusercontent.com/rupa/z/master/z.sh -o /usr/local/bin/z.sh && \
@@ -90,10 +90,10 @@ RUN apt-get install -y locales && \
 		locale-gen en_US.UTF-8 && \
 		echo "export LANG=en_US.UTF-8\nexport LANGUAGE=en_US:en\nexport LC_ALL=en_US.UTF-8" >> /root/.zshrc
 
-CMD ["zsh"]
-
 # Cleanup apt cache
-RUN rm -rf /var/lib/apt/lists/*
+RUN apt-get clean
+
+CMD ["zsh"]
 
 # Expose a range of ports (still need to use docker -P).
 # EXPOSE 8000-8099
