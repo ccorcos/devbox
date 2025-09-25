@@ -15,6 +15,11 @@ docker container prune -f
 docker image ls
 # delete all images
 docker rmi $(docker images -a -q)
+
+# List dangling images that were overwritten
+docker images -f dangling=true
+# Delete dangling images
+docker image prune
 ```
 
 ## Devbox Notes
@@ -26,28 +31,19 @@ Testing
 devbox build
 ```
 
+I'd like a function `auto_stop` which firsts first checks if a container has any attaches shells and if not, it will call stop_container. I want to run this after attach_container for the default command. This means that if I run `devbox`, when I exit, the container will be stopped and deleted. However, if I run `devbox` in two different terminals, I will attach to the same container and if I exit from either of them, the container won't be stopped and deleted until I exit from both processes.
+
+
+I'd like a command `devbox off`. It stops and deletes all active devbox containers regardless of whether there are connections to it. And then it turns off orb so long as no other containers (non-devbox containers) are cucrrently running.
 
 
 
 
-Currently container names are called $project but I'd like the container names should be `$project-devbox` so we can easily tell which containers and images are devboxes. Same goes with custom images -- those should also be called $project-devbox instead of just $project.
-
-
-I'd like an "autostop" function that we can run after users exit when running the default command. It should check to see if there are any other processes attached to the container and if not it should call stop to clean it up.
-
-
-I'd like to make the zshj
-
-zsh inside look better.
-Auto-stop?
 
 
 
-Claudemd better
-claude inside the devbox.
-
-
-
+Claudemd update. Readme update.
+How to use claude inside the devbox?
 
 Handle ctrl-c to stop orb, etc.
 
