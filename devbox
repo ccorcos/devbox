@@ -280,6 +280,36 @@ auto_stop() {
   fi
 }
 
+stop_all_containers() {
+  # Get all running devbox containers
+  local devbox_containers
+  devbox_containers=$(docker ps --filter "name=-devbox" --filter "name=devbox-" --format "{{.Names}}")
+
+  if [ -z "$devbox_containers" ]; then
+    return 0
+  fi
+
+  echo "$devbox_containers" | while read -r container; do
+    echo "Stopping and removing container: $container"
+    docker stop -t "$DOCKER_STOP_TIMEOUT" "$container" >/dev/null || true
+    docker rm "$container" >/dev/null || true
+  done
+}
+
+auto_off() {
+  # Check if any devbox containers are running
+  local running_devbox_containers
+  running_devbox_containers=$(docker ps --filter "name=-devbox" --filter "name=devbox-" -q | wc -l | tr -d ' ')
+
+  # If no devbox containers are running, stop OrbStack
+  if [ "$running_devbox_containers" -eq 0 ]; then
+    orb stop
+    print_success "OrbStack stopped."
+  else
+    # echo "$running_devbox_containers devbox container(s) still running. OrbStack remains active."
+  fi
+}
+
 init_devbox() {
   if [ -f "Dockerfile.devbox" ]; then
     echo "Dockerfile.devbox already exists in current directory."
@@ -367,6 +397,11 @@ case "$1" in
     if ! ensure_dockerfile; then exit 1; fi
     stop_container
     ;;
+  off)
+    if ! ensure_docker; then exit 1; fi
+    stop_all_containers
+    auto_off
+    ;;
   "")
     if ! ensure_docker; then exit 1; fi
     if ! ensure_dockerfile; then exit 1; fi
@@ -374,6 +409,7 @@ case "$1" in
     if ! ensure_container; then exit 1; fi
     attach_container
     auto_stop
+    auto_off
     ;;
   help|--help|-h|*)
     echo "Usage: $0 [COMMAND]"
@@ -384,5 +420,6 @@ case "$1" in
     echo "  init       - Copy Dockerfile.devbox template to current directory for a project-specific devbox."
     echo "  delete     - Stop the container, delete it, and delete the image."
     echo "  stop       - Stop the container and delete the container."
+    echo "  off        - Force stop all devbox containers and stop OrbStack."
     ;;
 esac
