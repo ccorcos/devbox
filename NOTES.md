@@ -24,6 +24,14 @@ docker image prune
 
 ## Devbox Notes
 
+Write a better README.md file.
+I want to communicate that the purpose of this project is to make it really easy for beginners to isolate their development environments inside docker containers for the purpose of security. Things like npm supply chain attacks are thus limited to the docker container, for example, rather than exposing your computer.
+Provide a little explanation of what docker is and how it works with images and containers just so they have some sense.
+Then explain how to use the tool.
+Make sure to include a quickstart that involves cloning the repo, symlinking it so its on your path, and then running it. Then show how to use init to customize.
+
+
+
 
 
 
