@@ -1,26 +1,12 @@
-# 🛡️ devbox - Secure Development Environments Made Simple
+# 🛡️ devbox - Development Environments Made Simple
 
-**Protect your computer from supply chain attacks and malicious code by isolating your development environments in Docker containers.**
+**Protect your computer from malicious code by isolating your development environments in Docker containers.**
 
 ## Why devbox?
 
-Modern development involves installing countless packages from npm, pip, cargo, and other package managers. Each package could potentially contain malicious code that could:
-- Access your SSH keys and personal files
-- Install backdoors or malware on your system
-- Steal credentials and sensitive data
-- Compromise your entire development machine
+Modern development involves installing countless packages from npm, pip, cargo, and other package managers. Each package could potentially contain malicious code exposing yourself to supply chain attacks.
 
-**devbox solves this by sandboxing your development work inside secure Docker containers**, keeping potential threats isolated from your main system.
-
-## What is Docker?
-
-Docker is a containerization platform that packages applications and their dependencies into lightweight, isolated containers. Think of containers like virtual machines, but much faster and more efficient.
-
-- **Images**: Read-only templates that define what goes into a container (like a blueprint)
-- **Containers**: Running instances of images that are completely isolated from your host system
-- **Isolation**: Each container has its own filesystem, network, and processes - totally separate from your computer
-
-When you run code inside a Docker container, even if it's malicious, it can't access your personal files, SSH keys, or other sensitive data on your host machine.
+The solution is to sandbox your development environment using Docker containers. But juggling Docker can be combersome so `devbox` was created to make it easy!
 
 ## Installation
 
@@ -86,10 +72,9 @@ Your customized environment will be built and started automatically.
 ## Security Benefits
 
 - **Supply Chain Protection**: npm/pip/cargo packages can only access the container, not your host system
-- **Credential Isolation**: Your SSH keys, browser cookies, and other credentials stay on your host
 - **Clean Environments**: Each project gets a fresh, clean environment without conflicts
-- **Easy Cleanup**: Delete containers instantly without leaving traces on your system
 - **Consistent Environments**: Same tools and versions across different machines
+- **Easy Cleanup**: Delete containers instantly without leaving traces on your system
 
 ## Commands
 
