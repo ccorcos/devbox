@@ -203,30 +203,8 @@ create_container() {
   local port="${PORT:-$DEFAULT_PORT}"
   echo "Creating new container $CONTAINER_NAME..."
 
-  # Load devbox config based on which container type we're using
-  local script_dir
-  script_dir=$(get_script_directory)
-
-  if [ -f "Dockerfile.devbox" ]; then
-    # Project-specific container: only load local devbox.env if it exists
-    if [ -f "devbox.env" ]; then
-      . ./devbox.env
-    fi
-  else
-    # Default container: only load devbox repo devbox.env if it exists
-    if [ -f "$script_dir/devbox.env" ]; then
-      . "$script_dir/devbox.env"
-    fi
-  fi
-
-  # Parse DEVBOX_CONFIG for additional docker run options
-  local config_options=""
-  if [ -n "$DEVBOX_CONFIG" ]; then
-    config_options="$DEVBOX_CONFIG"
-  fi
-
   docker run -d -p "$port:$port" -e "PORT=$port" --name "$CONTAINER_NAME" \
-    -v "$PWD":"/root/$PROJECT_NAME" $config_options "$IMAGE_NAME" tail -f /dev/null
+    -v "$PWD":"/root/$PROJECT_NAME" "$IMAGE_NAME" tail -f /dev/null
 }
 
 ensure_container() {
@@ -337,10 +315,9 @@ init_devbox() {
     return 1
   fi
 
-  local script_dir dockerfile_template env_template
+  local script_dir dockerfile_template
   script_dir=$(get_script_directory)
   dockerfile_template="$script_dir/Dockerfile.devbox"
-  env_template="$script_dir/devbox.env"
 
   # Copy Dockerfile template
   if [ -f "$dockerfile_template" ]; then
@@ -352,14 +329,7 @@ init_devbox() {
     return 1
   fi
 
-  # Copy devbox.env template if it doesn't exist
-  if [ -f "$env_template" ] && [ ! -f "devbox.env" ]; then
-    cp "$env_template" "./devbox.env"
-    echo "Created devbox.env configuration file."
-  fi
-
   echo "Edit the Dockerfile.devbox to customize tools for your project."
-  echo "Edit the devbox.env to customize container options (volumes, env vars, etc)."
 }
 
 show_status() {
