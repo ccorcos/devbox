@@ -34,18 +34,12 @@ devbox build
 I'd like a function `auto_stop` which firsts first checks if a container has any attaches shells and if not, it will call stop_container. I want to run this after attach_container for the default command. This means that if I run `devbox`, when I exit, the container will be stopped and deleted. However, if I run `devbox` in two different terminals, I will attach to the same container and if I exit from either of them, the container won't be stopped and deleted until I exit from both processes.
 
 
+
+
 I'd like a command `devbox off`. It stops and deletes all active devbox containers regardless of whether there are connections to it. And then it turns off orb so long as no other containers (non-devbox containers) are cucrrently running.
-
-
-
-
-
-
 
 Claudemd update. Readme update.
 How to use claude inside the devbox?
-
-Handle ctrl-c to stop orb, etc.
 
 ---
 

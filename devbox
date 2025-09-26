@@ -52,28 +52,28 @@ print_success() {
 # Prerequisites check
 ensure_docker() {
   # Check if docker command exists
-  if ! command -v docker >/dev/null 2>&1; then
+  if ! command -v docker >/dev/null; then
     print_error "Docker is not installed."
     echo "Please install Docker: brew install docker"
     return 1
   fi
 
   # Check if orb command exists (for OrbStack)
-  if ! command -v orb >/dev/null 2>&1; then
+  if ! command -v orb >/dev/null; then
     print_error "OrbStack is not installed."
     echo "Please install OrbStack: brew install orbstack"
     return 1
   fi
 
   # Check if OrbStack is running
-  if ! orb status >/dev/null 2>&1; then
+  if ! orb status >/dev/null; then
     echo "OrbStack is not running. Starting OrbStack..."
     orb start
     print_success "OrbStack started successfully."
   fi
 
   # Check if Docker daemon is accessible
-  if ! docker info >/dev/null 2>&1; then
+  if ! docker info >/dev/null; then
     print_error "Docker daemon is not accessible."
     echo "Please ensure Docker/OrbStack is running properly."
     return 1
@@ -96,7 +96,7 @@ ensure_dockerfile() {
 
 # Docker image functions
 image_exists() {
-  docker image inspect "$IMAGE_NAME" >/dev/null 2>&1
+  docker image inspect "$IMAGE_NAME" >/dev/null
 }
 
 get_dockerfile_hash() {
@@ -180,7 +180,7 @@ ensure_image() {
   fi
 
   # Check if image exists and is current
-  if ! docker image inspect "$IMAGE_NAME" >/dev/null 2>&1; then
+  if ! docker image inspect "$IMAGE_NAME" >/dev/null; then
     echo "Docker image '$IMAGE_NAME' not found. Building image..."
     build_image
   elif needs_rebuild; then
@@ -224,8 +224,8 @@ ensure_container() {
 stop_container() {
   if container_exists; then
     echo "Stopping and deleting container $CONTAINER_NAME..."
-    docker stop -t "$DOCKER_STOP_TIMEOUT" "$CONTAINER_NAME" 2>/dev/null || true
-    docker rm "$CONTAINER_NAME"
+    docker stop -t "$DOCKER_STOP_TIMEOUT" "$CONTAINER_NAME" >/dev/null || true
+    docker rm "$CONTAINER_NAME" >/dev/null
   else
     echo "Container $CONTAINER_NAME does not exist."
   fi
@@ -250,6 +250,34 @@ delete_image() {
 attach_container() {
   # Attach to the container
   docker exec -it -w "/$PROJECT_NAME" "$CONTAINER_NAME" /bin/zsh
+}
+
+auto_stop() {
+  # Check if container exists
+  if ! container_exists; then
+    return 0
+  fi
+
+  # If container exists but isn't running, delete it
+  if ! container_is_running; then
+    echo "Container is stopped. Deleting container..."
+    docker rm "$CONTAINER_NAME"
+    return 0
+  fi
+
+  # Count the number of attached shells (processes running /bin/zsh)
+  local shell_count
+  shell_count=$(docker exec "$CONTAINER_NAME" ps aux | grep -c "/bin/zsh" 2>/dev/null || echo "0")
+
+  # Ensure shell_count is a valid integer
+  case "$shell_count" in
+    ''|*[!0-9]*) shell_count=0 ;;
+  esac
+
+  # If no shells are attached, stop the container
+  if [ "$shell_count" -eq 0 ]; then
+    stop_container
+  fi
 }
 
 init_devbox() {
@@ -345,6 +373,7 @@ case "$1" in
     if ! ensure_image; then exit 1; fi
     if ! ensure_container; then exit 1; fi
     attach_container
+    auto_stop
     ;;
   help|--help|-h|*)
     echo "Usage: $0 [COMMAND]"
