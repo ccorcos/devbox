@@ -67,9 +67,8 @@ ensure_docker() {
 
   # Check if OrbStack is running
   if ! orb status >/dev/null; then
-    echo "OrbStack is not running. Starting OrbStack..."
     orb start
-    print_success "OrbStack started successfully."
+    echo "OrbStack started successfully."
   fi
 
   # Check if Docker daemon is accessible
@@ -304,9 +303,7 @@ auto_off() {
   # If no devbox containers are running, stop OrbStack
   if [ "$running_devbox_containers" -eq 0 ]; then
     orb stop
-    print_success "OrbStack stopped."
-  else
-    # echo "$running_devbox_containers devbox container(s) still running. OrbStack remains active."
+    echo "OrbStack stopped."
   fi
 }
 
