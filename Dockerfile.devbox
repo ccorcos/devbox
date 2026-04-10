@@ -26,13 +26,21 @@ RUN apt-get install -y \
     locales
 
 # =============================================================================
+# NON-ROOT USER WITH SUDO
+# =============================================================================
+RUN apt-get install -y sudo && \
+    useradd -m -s /bin/zsh -G sudo dev && \
+    echo "dev ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+
+# =============================================================================
 # SHELL ENVIRONMENT
 # =============================================================================
 
 # Install Zsh with Prezto
 RUN apt-get install -y zsh && \
-    git clone --recursive https://github.com/sorin-ionescu/prezto.git /root/.zprezto && \
-    zsh -c 'setopt EXTENDED_GLOB; for rcfile in /root/.zprezto/runcoms/^README.md(.N); do ln -s "$rcfile" "/root/.${rcfile:t}"; done'
+    git clone --recursive https://github.com/sorin-ionescu/prezto.git /home/dev/.zprezto && \
+    zsh -c 'setopt EXTENDED_GLOB; for rcfile in /home/dev/.zprezto/runcoms/^README.md(.N); do ln -s "$rcfile" "/home/dev/.${rcfile:t}"; done' && \
+    chown -R dev:dev /home/dev/.zprezto /home/dev/.z*
 
 # Install z command for directory jumping
 RUN curl -L https://raw.githubusercontent.com/rupa/z/master/z.sh -o /usr/local/bin/z.sh && \
@@ -42,10 +50,10 @@ RUN curl -L https://raw.githubusercontent.com/rupa/z/master/z.sh -o /usr/local/b
 
 # Set up locale
 RUN locale-gen en_US.UTF-8 && \
-    echo "export LANG=en_US.UTF-8\nexport LANGUAGE=en_US:en\nexport LC_ALL=en_US.UTF-8" >> /root/.zshrc
+    echo "export LANG=en_US.UTF-8\nexport LANGUAGE=en_US:en\nexport LC_ALL=en_US.UTF-8" >> /home/dev/.zshrc
 
 # Add devbox prefix to prompt
-RUN echo 'export PS1="[devbox] $PS1"' >> /root/.zshrc
+RUN echo 'export PS1="[devbox] $PS1"' >> /home/dev/.zshrc
 
 # =============================================================================
 # PYTHON DEVELOPMENT
@@ -100,25 +108,19 @@ RUN apt-get install -y \
 # =============================================================================
 
 # Claude Code
-RUN npm install -g @anthropic-ai/claude-code
-
-# Vim/Neovim
-# RUN apt-get install -y vim neovim
+RUN curl -fsSL https://claude.ai/install.sh | bash
 
 # Tmux
-# RUN apt-get install -y tmux
-
-# htop for system monitoring
-# RUN apt-get install -y htop
-
-# Tree for directory structure
-# RUN apt-get install -y tree
+RUN apt-get install -y tmux htop tree vim
 
 # =============================================================================
 # CLEANUP
 # =============================================================================
 
-RUN apt-get clean && rm -rf /var/lib/apt/lists/*
+# RUN apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Switch to non-root user
+USER dev
 
 # Default shell
 CMD ["zsh"]
