@@ -1,7 +1,6 @@
 #!/bin/sh
 
 # Script configuration and variables
-DEFAULT_PORT=3000
 DOCKER_STOP_TIMEOUT=0
 PROJECT_NAME=$(basename "$PWD")
 
@@ -200,10 +199,14 @@ container_is_running() {
 }
 
 create_container() {
-  local port="${PORT:-$DEFAULT_PORT}"
   echo "Creating new container $CONTAINER_NAME..."
 
-  docker run -d -p "$port:$port" -e "PORT=$port" --name "$CONTAINER_NAME" \
+  local port_args=""
+  if [ -n "$PORT" ]; then
+    port_args="-p $PORT:$PORT -e PORT=$PORT"
+  fi
+
+  docker run -d $port_args --name "$CONTAINER_NAME" \
     -v "$PWD":"/home/dev/$PROJECT_NAME" "$IMAGE_NAME" tail -f /dev/null
 }
 

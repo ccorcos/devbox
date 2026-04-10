@@ -34,7 +34,7 @@ devbox is a secure development environment tool that isolates development work i
 - System-wide installation via symlink: `sudo ln -s "$(pwd)/devbox" /usr/local/bin/devbox`
 
 ### Container Environment
-- Default port forwarding: 3000 (configurable via `PORT` environment variable)
+- No port forwarding by default; set `PORT` environment variable to forward a specific port (e.g. `PORT=3000 devbox`)
 - Project directory mounted read-write at `/workspace`
 - Containers use Zsh with Prezto configuration
 - Includes Claude Code (`@anthropic-ai/claude-code`) pre-installed

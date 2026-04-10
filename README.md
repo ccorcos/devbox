@@ -106,10 +106,20 @@ npm run dev
 
 ### Port Forwarding
 
-By default, port 3000 is forwarded. To use a different port:
+By default, no ports are forwarded. To forward a port into your container:
 
 ```bash
-PORT=8080 devbox
+PORT=3000 devbox
+```
+
+You can run multiple devboxes simultaneously with different ports:
+
+```bash
+# In one project
+PORT=3000 devbox
+
+# In another project
+PORT=3001 devbox
 ```
 
 ### Persistent Data
