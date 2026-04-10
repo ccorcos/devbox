@@ -23,37 +23,13 @@ RUN apt-get install -y \
     tldr \
     sqlite3 \
     iputils-ping \
-    locales
-
-# =============================================================================
-# NON-ROOT USER WITH SUDO
-# =============================================================================
-RUN apt-get install -y sudo && \
-    useradd -m -s /bin/zsh -G sudo dev && \
-    echo "dev ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
-
-# =============================================================================
-# SHELL ENVIRONMENT
-# =============================================================================
-
-# Install Zsh with Prezto
-RUN apt-get install -y zsh && \
-    git clone --recursive https://github.com/sorin-ionescu/prezto.git /home/dev/.zprezto && \
-    zsh -c 'setopt EXTENDED_GLOB; for rcfile in /home/dev/.zprezto/runcoms/^README.md(.N); do ln -s "$rcfile" "/home/dev/.${rcfile:t}"; done' && \
-    chown -R dev:dev /home/dev/.zprezto /home/dev/.z*
-
-# Install z command for directory jumping
-RUN curl -L https://raw.githubusercontent.com/rupa/z/master/z.sh -o /usr/local/bin/z.sh && \
-    chmod +x /usr/local/bin/z.sh && \
-    mkdir -p /usr/local/share/man/man1 && \
-    curl -L https://raw.githubusercontent.com/rupa/z/master/z.1 -o /usr/local/share/man/man1/z.1
-
-# Set up locale
-RUN locale-gen en_US.UTF-8 && \
-    echo "export LANG=en_US.UTF-8\nexport LANGUAGE=en_US:en\nexport LC_ALL=en_US.UTF-8" >> /home/dev/.zshrc
-
-# Add devbox prefix to prompt
-RUN echo 'export PS1="[devbox] $PS1"' >> /home/dev/.zshrc
+    locales \
+    sudo \
+    zsh \
+    tmux \
+    htop \
+    tree \
+    vim
 
 # =============================================================================
 # PYTHON DEVELOPMENT
@@ -64,8 +40,6 @@ RUN apt-get install -y \
     python3-venv \
     pipx
 
-# RUN pip3 install --upgrade pip poetry virtualenv
-
 # =============================================================================
 # NODE.JS DEVELOPMENT
 # =============================================================================
@@ -73,21 +47,11 @@ RUN apt-get install -y \
     nodejs \
     npm
 
-# RUN npm install -g n yarn pnpm @angular/cli create-react-app
-
-# RUN n stable
-
-# =============================================================================
-# DATABASES (Uncomment to enable)
-# =============================================================================
-# PostgreSQL client
-# RUN apt-get install -y postgresql-client
-
-# Redis client
-# RUN apt-get install -y redis-tools
+RUN npm install -g n
+RUN n stable
 
 # =============================================================================
-# MEDIA & DOCUMENT PROCESSING (Uncomment to enable)
+# MEDIA & DOCUMENT PROCESSING
 # =============================================================================
 
 RUN apt-get install -y \
@@ -104,23 +68,39 @@ RUN apt-get install -y \
     libreoffice
 
 # =============================================================================
-# ADDITIONAL DEVELOPMENT TOOLS (Uncomment to enable)
+# SYSTEM CONFIGURATION
 # =============================================================================
 
-# Claude Code
-RUN curl -fsSL https://claude.ai/install.sh | bash
+# Set up locale
+RUN locale-gen en_US.UTF-8
 
-# Tmux
-RUN apt-get install -y tmux htop tree vim
-
-# =============================================================================
-# CLEANUP
-# =============================================================================
+# Install z command for directory jumping
+RUN curl -L https://raw.githubusercontent.com/rupa/z/master/z.sh -o /usr/local/bin/z.sh && \
+    chmod +x /usr/local/bin/z.sh && \
+    mkdir -p /usr/local/share/man/man1 && \
+    curl -L https://raw.githubusercontent.com/rupa/z/master/z.1 -o /usr/local/share/man/man1/z.1
 
 # RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Switch to non-root user
+# =============================================================================
+# DEV USER
+# =============================================================================
+
+RUN useradd -m -s /bin/zsh -G sudo dev && \
+    echo "dev ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+
 USER dev
+
+# Shell environment (Prezto)
+RUN git clone --recursive https://github.com/sorin-ionescu/prezto.git /home/dev/.zprezto && \
+    zsh -c 'setopt EXTENDED_GLOB; for rcfile in /home/dev/.zprezto/runcoms/^README.md(.N); do ln -s "$rcfile" "/home/dev/.${rcfile:t}"; done'
+
+# Shell config
+RUN echo 'export LANG=en_US.UTF-8\nexport LANGUAGE=en_US:en\nexport LC_ALL=en_US.UTF-8' >> /home/dev/.zshrc && \
+    echo 'export PS1="[devbox] $PS1"' >> /home/dev/.zshrc
+
+# Claude Code
+RUN curl -fsSL https://claude.ai/install.sh | bash
 
 # Default shell
 CMD ["zsh"]
