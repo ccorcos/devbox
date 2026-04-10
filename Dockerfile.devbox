@@ -86,6 +86,9 @@ RUN curl -L https://raw.githubusercontent.com/rupa/z/master/z.sh -o /usr/local/b
 # DEV USER
 # =============================================================================
 
+# To get Claude Code to work.
+RUN apt-get install -y ncurses-term
+
 RUN useradd -m -s /bin/zsh -G sudo dev && \
     echo "dev ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
@@ -97,6 +100,7 @@ RUN git clone --recursive https://github.com/sorin-ionescu/prezto.git /home/dev/
 
 # Shell config
 RUN echo 'export LANG=en_US.UTF-8\nexport LANGUAGE=en_US:en\nexport LC_ALL=en_US.UTF-8' >> /home/dev/.zshrc && \
+    echo 'export PATH="$HOME/.local/bin:$PATH"' >> /home/dev/.zshrc && \
     echo 'export PS1="[devbox] $PS1"' >> /home/dev/.zshrc
 
 # Claude Code

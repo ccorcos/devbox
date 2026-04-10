@@ -204,7 +204,7 @@ create_container() {
   echo "Creating new container $CONTAINER_NAME..."
 
   docker run -d -p "$port:$port" -e "PORT=$port" --name "$CONTAINER_NAME" \
-    -v "$PWD":"/root/$PROJECT_NAME" "$IMAGE_NAME" tail -f /dev/null
+    -v "$PWD":"/home/dev/$PROJECT_NAME" "$IMAGE_NAME" tail -f /dev/null
 }
 
 ensure_container() {
@@ -249,7 +249,7 @@ delete_image() {
 
 attach_container() {
   # Attach to the container
-  docker exec -it -w "/root/$PROJECT_NAME" "$CONTAINER_NAME" /bin/zsh
+  docker exec -it -w "/home/dev/$PROJECT_NAME" "$CONTAINER_NAME" /bin/zsh
 }
 
 auto_stop() {
