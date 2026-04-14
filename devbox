@@ -225,12 +225,16 @@ ensure_container() {
 
 # Cleanup and delete functions
 stop_container() {
-  if container_exists; then
-    echo "Stopping and deleting container $CONTAINER_NAME..."
+  if container_exists && container_is_running; then
+    echo "Stopping container $CONTAINER_NAME..."
     docker stop -t "$DOCKER_STOP_TIMEOUT" "$CONTAINER_NAME" >/dev/null || true
+  fi
+}
+
+delete_container() {
+  if container_exists; then
+    echo "Deleting container $CONTAINER_NAME..."
     docker rm "$CONTAINER_NAME" >/dev/null
-  else
-    echo "Container $CONTAINER_NAME does not exist."
   fi
 }
 
@@ -256,15 +260,8 @@ attach_container() {
 }
 
 auto_stop() {
-  # Check if container exists
-  if ! container_exists; then
-    return 0
-  fi
-
-  # If container exists but isn't running, delete it
-  if ! container_is_running; then
-    echo "Container is stopped. Deleting container..."
-    docker rm "$CONTAINER_NAME"
+  # Check if container exists and is running
+  if ! container_exists || ! container_is_running; then
     return 0
   fi
 
@@ -398,6 +395,7 @@ case "$1" in
     if ! ensure_docker; then exit 1; fi
     if ! ensure_dockerfile; then exit 1; fi
     stop_container
+    delete_container
     ;;
   off)
     if ! ensure_docker; then exit 1; fi
@@ -410,34 +408,22 @@ case "$1" in
     if ! ensure_image; then exit 1; fi
     if ! ensure_container; then exit 1; fi
     attach_container
+    auto_stop
 
-    # If container is gone or not running, just clean up
-    if ! container_exists || ! container_is_running; then
-      auto_stop
-      auto_off
+    # If other shells were still attached, auto_stop left the container running
+    if container_is_running; then
       exit 0
     fi
 
-    # Count remaining attached shells
-    shell_count=$(docker exec "$CONTAINER_NAME" ps aux | grep -c "/bin/zsh" 2>/dev/null || echo "0")
-    case "$shell_count" in
-      ''|*[!0-9]*) shell_count=0 ;;
-    esac
-
-    # If other shells are still attached, just exit silently
-    if [ "$shell_count" -gt 0 ]; then
-      exit 0
-    fi
-
-    # Last shell — ask user whether to keep the container or tear it down
-    printf "Keep devbox running? [Y/n] "
+    # Last shell — container is now stopped. Ask whether to delete it.
+    printf "Delete devbox container? [y/N] "
     read -r answer
     case "$answer" in
-      n|N|no|No|NO)
-        stop_container
-        auto_off
+      y|Y|yes|Yes|YES)
+        delete_container
         ;;
     esac
+    auto_off
     ;;
   help|--help|-h|*)
     echo "Usage: $0 [COMMAND]"
