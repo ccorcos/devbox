@@ -410,8 +410,34 @@ case "$1" in
     if ! ensure_image; then exit 1; fi
     if ! ensure_container; then exit 1; fi
     attach_container
-    auto_stop
-    auto_off
+
+    # If container is gone or not running, just clean up
+    if ! container_exists || ! container_is_running; then
+      auto_stop
+      auto_off
+      exit 0
+    fi
+
+    # Count remaining attached shells
+    shell_count=$(docker exec "$CONTAINER_NAME" ps aux | grep -c "/bin/zsh" 2>/dev/null || echo "0")
+    case "$shell_count" in
+      ''|*[!0-9]*) shell_count=0 ;;
+    esac
+
+    # If other shells are still attached, just exit silently
+    if [ "$shell_count" -gt 0 ]; then
+      exit 0
+    fi
+
+    # Last shell — ask user whether to keep the container or tear it down
+    printf "Keep devbox running? [Y/n] "
+    read -r answer
+    case "$answer" in
+      n|N|no|No|NO)
+        stop_container
+        auto_off
+        ;;
+    esac
     ;;
   help|--help|-h|*)
     echo "Usage: $0 [COMMAND]"
