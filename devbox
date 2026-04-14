@@ -290,9 +290,8 @@ stop_all_containers() {
   fi
 
   echo "$devbox_containers" | while read -r container; do
-    echo "Stopping and removing container: $container"
+    echo "Stopping container: $container"
     docker stop -t "$DOCKER_STOP_TIMEOUT" "$container" >/dev/null || true
-    docker rm "$container" >/dev/null || true
   done
 }
 
@@ -395,7 +394,13 @@ case "$1" in
     if ! ensure_docker; then exit 1; fi
     if ! ensure_dockerfile; then exit 1; fi
     stop_container
-    delete_container
+    printf "Delete devbox container? [y/N] "
+    read -r answer
+    case "$answer" in
+      y|Y|yes|Yes|YES)
+        delete_container
+        ;;
+    esac
     ;;
   off)
     if ! ensure_docker; then exit 1; fi
