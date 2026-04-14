@@ -396,6 +396,11 @@ case "$1" in
     stop_container
     printf "Delete devbox container? [y/N] "
     read -r answer
+    if [ -z "$answer" ]; then
+      # Overwrite the prompt line with the default answer
+      printf "\033[1A\033[2K"
+      echo "Delete devbox container? [y/N] N"
+    fi
     case "$answer" in
       y|Y|yes|Yes|YES)
         delete_container
@@ -423,6 +428,11 @@ case "$1" in
     # Last shell — container is now stopped. Ask whether to delete it.
     printf "Delete devbox container? [y/N] "
     read -r answer
+    if [ -z "$answer" ]; then
+      # Overwrite the prompt line with the default answer
+      printf "\033[1A\033[2K"
+      echo "Delete devbox container? [y/N] N"
+    fi
     case "$answer" in
       y|Y|yes|Yes|YES)
         delete_container
