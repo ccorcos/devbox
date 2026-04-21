@@ -2,15 +2,7 @@
 
 **Protect your computer from malicious code by isolating your development environments in Docker containers.**
 
-## Why devbox?
-
-Modern development involves installing countless packages from npm, pip, cargo, and other package managers. Each package could potentially contain malicious code exposing yourself to supply chain attacks.
-
-The solution is to sandbox your development environment using Docker containers. But juggling Docker can be combersome so `devbox` was created to make it easy!
-
-## Installation
-
-### Prerequisites
+## Setup
 
 Install Docker and OrbStack (a fast Docker runtime for macOS):
 
@@ -18,7 +10,7 @@ Install Docker and OrbStack (a fast Docker runtime for macOS):
 brew install docker orbstack
 ```
 
-### Install devbox
+Clone the repository and add the `devbox` command to your path somewhere.
 
 ```bash
 # Clone the repository
@@ -29,37 +21,36 @@ cd devbox
 sudo ln -s "$(pwd)/devbox" /usr/local/bin/devbox
 ```
 
-## Quick Start
+Customize your default devbox by modifying `Dockerfile.devbox`
 
-### 1. Basic Usage (Default Environment)
-
-Navigate to any project and run devbox:
+## Usage
 
 ```bash
 cd your-project
 devbox
 ```
 
-This creates a secure container with common development tools and drops you into a shell inside it. Your project files are mounted read-write, but everything else is isolated.
-
-### 2. Custom Project Environment
-
-For project-specific tool requirements:
+For a project-specific `Dockerfile.devbox`:
 
 ```bash
 cd your-project
 devbox init
 ```
 
-This creates a `Dockerfile.devbox` in your project that you can customize.
+Docker containers will be started and stopped on demand. And when you exit the container it will ask you if you'd like to delete it.
 
-Then run:
-
-```bash
-devbox
 ```
+❯❯❯ devbox --help
+Usage: /usr/local/bin/devbox [COMMAND]
 
-Your customized environment will be built and started automatically.
+Commands:
+  (no args)  - Create the devbox and attach to it.
+  status     - Show status of devbox Dockerfile, image, and container.
+  init       - Copy Dockerfile.devbox template to current directory for a project-specific devbox.
+  delete     - Stop the container, delete it, and delete the image.
+  stop       - Stop the container and delete the container.
+  off        - Force stop all devbox containers and stop OrbStack.
+```
 
 ## How It Works
 
@@ -75,32 +66,6 @@ Your customized environment will be built and started automatically.
 - **Clean Environments**: Each project gets a fresh, clean environment without conflicts
 - **Consistent Environments**: Same tools and versions across different machines
 - **Easy Cleanup**: Delete containers instantly without leaving traces on your system
-
-## Commands
-
-| Command | Description |
-|---------|-------------|
-| `devbox` | Create and attach to your development container |
-| `devbox status` | Show status of your containers and images |
-| `devbox init` | Create a custom `Dockerfile.devbox` for your project |
-| `devbox start` | Start a stopped container |
-| `devbox stop` | Stop and remove the current project's container |
-| `devbox off` | Stop all devbox containers and shut down Docker |
-| `devbox build` | Force rebuild the Docker image |
-
-## Example Workflows
-
-### Web Development with Node.js
-
-```bash
-cd my-web-app
-devbox init
-# Edit Dockerfile.devbox to include Node.js, npm, etc.
-devbox
-# Inside container:
-npm install
-npm run dev
-```
 
 ## Advanced Configuration
 
