@@ -181,6 +181,11 @@ ensure_image() {
   if ! docker image inspect "$IMAGE_NAME" >/dev/null; then
     echo "Docker image '$IMAGE_NAME' not found. Building image..."
     build_image
+  elif container_exists; then
+    echo "Reusing existing devbox instance."
+    if needs_rebuild; then
+      echo "Dockerfile has changed — delete this instance to rebuild with the updated image."
+    fi
   elif needs_rebuild; then
     echo "Dockerfile has been modified. Rebuilding image..."
     build_image
