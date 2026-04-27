@@ -203,6 +203,22 @@ container_is_running() {
   [ "$(docker inspect -f '{{.State.Running}}' "$CONTAINER_NAME" 2>/dev/null)" = "true" ]
 }
 
+build_env_args() {
+  local env_args=""
+  local script_dir
+  script_dir=$(get_script_directory)
+
+  if [ -f "$script_dir/.env" ]; then
+    env_args="$env_args --env-file $script_dir/.env"
+  fi
+
+  if [ -f "$PWD/.env" ]; then
+    env_args="$env_args --env-file $PWD/.env"
+  fi
+
+  echo "$env_args"
+}
+
 create_container() {
   echo "Creating new container $CONTAINER_NAME..."
 
@@ -211,7 +227,10 @@ create_container() {
     port_args="-p $PORT:$PORT -e PORT=$PORT"
   fi
 
-  docker run -d $port_args --name "$CONTAINER_NAME" \
+  local env_args
+  env_args=$(build_env_args)
+
+  docker run -d $port_args $env_args --name "$CONTAINER_NAME" \
     -v "$PWD":"/home/dev/$PROJECT_NAME" "$IMAGE_NAME" tail -f /dev/null
 }
 
