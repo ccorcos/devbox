@@ -47,9 +47,6 @@ RUN apt-get install -y \
     nodejs \
     npm
 
-RUN npm install -g n
-RUN n stable
-
 # =============================================================================
 # MEDIA & DOCUMENT PROCESSING
 # =============================================================================
@@ -94,6 +91,13 @@ RUN useradd -m -s /bin/zsh -G sudo dev && \
 
 USER dev
 
+# Node.js via n, installed under the dev user so `npm install -g` works without sudo
+ENV N_PREFIX=/home/dev/.n
+ENV PATH=/home/dev/.n/bin:$PATH
+RUN npm config set prefix /home/dev/.n && \
+    npm install -g n && \
+    n stable
+
 # Shell environment (Prezto)
 RUN git clone --recursive https://github.com/sorin-ionescu/prezto.git /home/dev/.zprezto && \
     zsh -c 'setopt EXTENDED_GLOB; for rcfile in /home/dev/.zprezto/runcoms/^README.md(.N); do ln -s "$rcfile" "/home/dev/.${rcfile:t}"; done'
@@ -101,7 +105,8 @@ RUN git clone --recursive https://github.com/sorin-ionescu/prezto.git /home/dev/
 # Shell config
 RUN echo 'export LANG=en_US.UTF-8\nexport LANGUAGE=en_US:en\nexport LC_ALL=en_US.UTF-8' >> /home/dev/.zshrc && \
     echo 'export PATH="$HOME/.local/bin:$PATH"' >> /home/dev/.zshrc && \
-    echo 'export PS1="[devbox] $PS1"' >> /home/dev/.zshrc
+    echo 'export PS1="[devbox] $PS1"' >> /home/dev/.zshrc && \
+    echo 'alias cc="claude --dangerously-skip-permissions"' >> /home/dev/.zshrc
 
 # Claude Code
 RUN curl -fsSL https://claude.ai/install.sh | bash
