@@ -116,7 +116,7 @@ RUN echo 'export LANG=en_US.UTF-8\nexport LANGUAGE=en_US:en\nexport LC_ALL=en_US
 # Claude Code
 RUN curl -fsSL https://claude.ai/install.sh | bash
 # Pi Coding Agent
-RUN npm install -g @mariozechner/pi-coding-agent
+RUN curl -fsSL https://pi.dev/install.sh | sh
 # OpenCode
 RUN curl -fsSL https://opencode.ai/install | bash
 
